@@ -29,7 +29,7 @@ async def lifespan(server: FastMCP) -> AsyncIterator[MolTrustClient]:
     async with httpx.AsyncClient(
         base_url=api_url,
         timeout=TIMEOUT,
-        headers={"User-Agent": "moltrust-mcp-server/0.1.0"},
+        headers={"User-Agent": "moltrust-mcp-server/0.2.0"},
     ) as http:
         yield MolTrustClient(http=http, api_key=api_key, api_url=api_url)
 
@@ -332,6 +332,138 @@ async def moltrust_credential(
 
     else:
         return 'Error: action must be "issue" or "verify".'
+
+
+@mcp.tool()
+async def moltrust_credits(
+    action: str,
+    did: str = "",
+    to_did: str = "",
+    amount: int = 0,
+    reference: str = "",
+    limit: int = 20,
+    offset: int = 0,
+    ctx: Context[ServerSession, MolTrustClient] = None,
+) -> str:
+    """Manage MolTrust credits: check balance, view pricing, transfer credits, or view transaction history.
+
+    Args:
+        action: One of "balance", "pricing", "transfer", or "transactions"
+        did: Agent DID (required for "balance" and "transactions")
+        to_did: Recipient DID (required for "transfer")
+        amount: Number of credits to transfer (required for "transfer", must be >= 1)
+        reference: Optional reference string for transfers
+        limit: Max transactions to return (default 20, for "transactions")
+        offset: Pagination offset (default 0, for "transactions")
+    """
+    client = _client(ctx)
+
+    if action == "balance":
+        if not did:
+            return "Error: did is required for balance check."
+        resp = await client.http.get(f"/credits/balance/{did}")
+        if resp.status_code != 200:
+            return f"Error {resp.status_code}: {resp.text}"
+        data = resp.json()
+        return f"DID: {data['did']}\nBalance: {data['balance']} {data['currency']}"
+
+    elif action == "pricing":
+        resp = await client.http.get("/credits/pricing")
+        if resp.status_code != 200:
+            return f"Error {resp.status_code}: {resp.text}"
+        data = resp.json()
+        lines = [
+            "MolTrust API Pricing",
+            f"Free credits on registration: {data.get('free_on_registration', 100)}",
+            "",
+        ]
+        pricing = data.get("pricing", {})
+        free = []
+        paid = []
+        for endpoint, cost in sorted(pricing.items()):
+            if cost == 0:
+                free.append(endpoint)
+            else:
+                paid.append((endpoint, cost))
+        if free:
+            lines.append("Free endpoints:")
+            for ep in free:
+                lines.append(f"  {ep}")
+        if paid:
+            lines.append("")
+            lines.append("Paid endpoints:")
+            for ep, cost in paid:
+                lines.append(f"  {ep}: {cost} credit{'s' if cost != 1 else ''}")
+        return "\n".join(lines)
+
+    elif action == "transfer":
+        if not client.api_key:
+            return "Error: MOLTRUST_API_KEY environment variable is not set."
+        if not did:
+            return "Error: did (sender) is required for transfer."
+        if not to_did:
+            return "Error: to_did (recipient) is required for transfer."
+        if amount < 1:
+            return "Error: amount must be at least 1."
+
+        resp = await client.http.post(
+            "/credits/transfer",
+            json={"from_did": did, "to_did": to_did, "amount": amount, "reference": reference},
+            headers=_auth_headers(client),
+        )
+        if resp.status_code == 402:
+            data = resp.json()
+            return f"Insufficient credits: {data.get('error', 'balance too low')}"
+        if resp.status_code == 403:
+            return f"Forbidden: {resp.json().get('detail', 'API key does not own the source DID')}"
+        if resp.status_code != 200:
+            return f"Error {resp.status_code}: {resp.text}"
+
+        data = resp.json()
+        return (
+            f"Transfer successful!\n"
+            f"From:    {data['from_did']}\n"
+            f"To:      {data['to_did']}\n"
+            f"Amount:  {data['amount']} {data['currency']}\n"
+            f"Balance: {data['balance_after']} {data['currency']}"
+        )
+
+    elif action == "transactions":
+        if not client.api_key:
+            return "Error: MOLTRUST_API_KEY environment variable is not set."
+        if not did:
+            return "Error: did is required for transaction history."
+
+        resp = await client.http.get(
+            f"/credits/transactions/{did}",
+            params={"limit": limit, "offset": offset},
+            headers=_auth_headers(client),
+        )
+        if resp.status_code == 403:
+            return f"Forbidden: {resp.json().get('detail', 'API key does not own this DID')}"
+        if resp.status_code != 200:
+            return f"Error {resp.status_code}: {resp.text}"
+
+        data = resp.json()
+        txs = data.get("transactions", [])
+        if not txs:
+            return f"No transactions found for {did}."
+
+        lines = [f"Transaction history for {did} ({len(txs)} entries):"]
+        for tx in txs:
+            direction = ""
+            if tx.get("from_did") == did:
+                direction = f"-> {tx.get('to_did', 'system')}"
+            else:
+                direction = f"<- {tx.get('from_did', 'system')}"
+            lines.append(
+                f"  [{tx['tx_type']}] {tx['amount']} credits {direction} "
+                f"| bal: {tx['balance_after']} | {tx.get('created_at', '?')}"
+            )
+        return "\n".join(lines)
+
+    else:
+        return 'Error: action must be "balance", "pricing", "transfer", or "transactions".'
 
 
 # ---------------------------------------------------------------------------

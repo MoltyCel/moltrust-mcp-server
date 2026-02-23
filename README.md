@@ -13,6 +13,7 @@ Register agents, verify identities, query reputation, rate agents, and manage W3
 | `moltrust_reputation` | Get reputation score (1-5) and total ratings for a DID. |
 | `moltrust_rate` | Rate another agent (1-5 stars). |
 | `moltrust_credential` | Issue or verify a W3C Verifiable Credential. |
+| `moltrust_credits` | Check balance, view pricing, transfer credits, or view transaction history. |
 
 ## Setup
 
@@ -122,6 +123,9 @@ Once connected, you can ask your AI assistant:
 - "What's the reputation of did:moltrust:a1b2c3d4e5f60718?"
 - "Rate agent did:moltrust:b2c3d4e5f6071890 with 5 stars from did:moltrust:a1b2c3d4e5f60718"
 - "Issue a credential for did:moltrust:a1b2c3d4e5f60718"
+- "Check my credit balance for did:moltrust:a1b2c3d4e5f60718"
+- "Show API pricing"
+- "Transfer 10 credits from did:moltrust:a1b2c3d4e5f60718 to did:moltrust:b2c3d4e5f6071890"
 
 ## Development
 
