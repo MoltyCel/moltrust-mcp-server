@@ -467,7 +467,6 @@ async def moltrust_credits(
 
 
 
-
 @mcp.tool()
 async def moltrust_deposit_info(
     ctx: Context[ServerSession, MolTrustClient],
@@ -488,12 +487,12 @@ async def moltrust_deposit_info(
     lines = [
         "USDC Deposit Instructions",
         "",
-        f"Wallet:   {data['wallet']}",
-        f"Network:  {data['network']}",
-        f"Token:    {data['token']}",
-        f"Contract: {data['token_contract']}",
-        f"Rate:     {data['rate']}",
-        f"Min conf: {data['min_confirmations']}",
+        f"Wallet:   {data.get('wallet', '?')}",
+        f"Network:  {data.get('network', '?')}",
+        f"Token:    {data.get('token', '?')}",
+        f"Contract: {data.get('token_contract', '?')}",
+        f"Rate:     {data.get('rate', '?')}",
+        f"Min conf: {data.get('min_confirmations', '?')}",
         "",
     ]
     for step in data.get("instructions", []):
@@ -522,6 +521,10 @@ async def moltrust_claim_deposit(
     if not client.api_key:
         return "Error: MOLTRUST_API_KEY environment variable is not set."
 
+    tx_hash = tx_hash.strip()
+    if not tx_hash.startswith("0x") or len(tx_hash) != 66:
+        return "Error: tx_hash must be a 0x-prefixed 64-character hex string (e.g. 0xabc...def)."
+
     resp = await client.http.post(
         "/credits/deposit",
         json={"tx_hash": tx_hash, "did": did},
@@ -541,13 +544,13 @@ async def moltrust_claim_deposit(
     return (
         f"Deposit successful!\n"
         f"\n"
-        f"TX:       {data['tx_hash']}\n"
-        f"From:     {data['from_address']}\n"
-        f"USDC:     {data['usdc_amount']}\n"
-        f"Credits:  +{data['credits_granted']}\n"
-        f"Balance:  {data['new_balance']} CREDITS\n"
-        f"Rate:     {data['rate']}\n"
-        f"BaseScan: {data['basescan_url']}"
+        f"TX:       {data.get('tx_hash', '?')}\n"
+        f"From:     {data.get('from_address', '?')}\n"
+        f"USDC:     {data.get('usdc_amount', '?')}\n"
+        f"Credits:  +{data.get('credits_granted', '?')}\n"
+        f"Balance:  {data.get('new_balance', '?')} CREDITS\n"
+        f"Rate:     {data.get('rate', '?')}\n"
+        f"BaseScan: {data.get('basescan_url', '?')}"
     )
 
 
@@ -613,7 +616,7 @@ async def moltrust_deposit_history(
     ]
     for d in deposits:
         lines.append(
-            f"  {d['usdc_amount']} USDC -> {d['credits_granted']} credits "
+            f"  {d.get('usdc_amount', '?')} USDC -> {d.get('credits_granted', '?')} credits "
             f"| {d.get('claimed_at', '?')} | {d.get('basescan_url', '')}"
         )
 
