@@ -1,18 +1,18 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
-  "name": "io.github.moltycel/moltrust-mcp-server",
+  "name": "io.github.MoltyCel/moltrust-mcp-server",
   "title": "MolTrust MCP Server",
-  "description": "Trust infrastructure for AI agents — register DIDs, verify identities, query reputation scores, rate agents, manage W3C Verifiable Credentials, and handle USDC credit deposits on Base.",
+  "description": "Trust infrastructure for AI agents — DIDs, reputation, verifiable credentials, USDC.",
   "repository": {
     "url": "https://github.com/MoltyCel/moltrust-mcp-server",
     "source": "github"
   },
-  "version": "0.3.1",
+  "version": "0.3.2",
   "packages": [
     {
       "registryType": "pypi",
       "identifier": "moltrust-mcp-server",
-      "version": "0.3.1",
+      "version": "0.3.2",
       "transport": {
         "type": "stdio"
       }
