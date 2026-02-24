@@ -193,3 +193,216 @@ class TestMoltrustCredential:
             action="delete", ctx=ctx,
         )
         assert "issue" in result and "verify" in result
+
+
+class TestMoltrustDepositInfo:
+    @pytest.mark.asyncio
+    async def test_deposit_info_success(self, mock_client):
+        mock_client.http.get = AsyncMock(return_value=make_response(200, {
+            "wallet": "0xWALLET",
+            "network": "Base",
+            "token": "USDC",
+            "token_contract": "0xCONTRACT",
+            "rate": "1 USDC = 100 credits",
+            "min_confirmations": 12,
+            "instructions": ["Step 1: Send USDC", "Step 2: Claim"],
+        }))
+
+        ctx = make_ctx(mock_client)
+        result = await mcp._tool_manager._tools["moltrust_deposit_info"].fn(
+            ctx=ctx,
+        )
+        assert "0xWALLET" in result
+        assert "Base" in result
+        assert "USDC" in result
+        assert "Step 1" in result
+
+    @pytest.mark.asyncio
+    async def test_deposit_info_missing_fields(self, mock_client):
+        mock_client.http.get = AsyncMock(return_value=make_response(200, {}))
+
+        ctx = make_ctx(mock_client)
+        result = await mcp._tool_manager._tools["moltrust_deposit_info"].fn(
+            ctx=ctx,
+        )
+        assert "?" in result
+
+    @pytest.mark.asyncio
+    async def test_deposit_info_error(self, mock_client):
+        mock_client.http.get = AsyncMock(return_value=make_response(500, {}))
+
+        ctx = make_ctx(mock_client)
+        result = await mcp._tool_manager._tools["moltrust_deposit_info"].fn(
+            ctx=ctx,
+        )
+        assert "Error 500" in result
+
+
+class TestMoltrustClaimDeposit:
+    @pytest.mark.asyncio
+    async def test_claim_success(self, mock_client):
+        mock_client.http.post = AsyncMock(return_value=make_response(200, {
+            "tx_hash": "0x" + "a1" * 32,
+            "from_address": "0xSENDER",
+            "usdc_amount": "10.0",
+            "credits_granted": 1000,
+            "new_balance": 1100,
+            "rate": "1 USDC = 100 credits",
+            "basescan_url": "https://basescan.org/tx/0x...",
+        }))
+
+        ctx = make_ctx(mock_client)
+        result = await mcp._tool_manager._tools["moltrust_claim_deposit"].fn(
+            tx_hash="0x" + "a1" * 32,
+            did="did:moltrust:abc123def4567890",
+            ctx=ctx,
+        )
+        assert "Deposit successful" in result
+        assert "1000" in result
+
+    @pytest.mark.asyncio
+    async def test_claim_no_api_key(self, mock_client):
+        mock_client.api_key = ""
+        ctx = make_ctx(mock_client)
+        result = await mcp._tool_manager._tools["moltrust_claim_deposit"].fn(
+            tx_hash="0x" + "a1" * 32,
+            did="did:moltrust:abc123def4567890",
+            ctx=ctx,
+        )
+        assert "MOLTRUST_API_KEY" in result
+
+    @pytest.mark.asyncio
+    async def test_claim_invalid_tx_hash_no_prefix(self, mock_client):
+        ctx = make_ctx(mock_client)
+        result = await mcp._tool_manager._tools["moltrust_claim_deposit"].fn(
+            tx_hash="a1" * 32,
+            did="did:moltrust:abc123def4567890",
+            ctx=ctx,
+        )
+        assert "0x-prefixed" in result
+
+    @pytest.mark.asyncio
+    async def test_claim_invalid_tx_hash_too_short(self, mock_client):
+        ctx = make_ctx(mock_client)
+        result = await mcp._tool_manager._tools["moltrust_claim_deposit"].fn(
+            tx_hash="0xabc",
+            did="did:moltrust:abc123def4567890",
+            ctx=ctx,
+        )
+        assert "0x-prefixed" in result
+
+    @pytest.mark.asyncio
+    async def test_claim_duplicate(self, mock_client):
+        mock_client.http.post = AsyncMock(return_value=make_response(409, {}))
+
+        ctx = make_ctx(mock_client)
+        result = await mcp._tool_manager._tools["moltrust_claim_deposit"].fn(
+            tx_hash="0x" + "a1" * 32,
+            did="did:moltrust:abc123def4567890",
+            ctx=ctx,
+        )
+        assert "already been claimed" in result
+
+    @pytest.mark.asyncio
+    async def test_claim_forbidden(self, mock_client):
+        mock_client.http.post = AsyncMock(return_value=make_response(403, {
+            "detail": "API key does not own this DID",
+        }))
+
+        ctx = make_ctx(mock_client)
+        result = await mcp._tool_manager._tools["moltrust_claim_deposit"].fn(
+            tx_hash="0x" + "a1" * 32,
+            did="did:moltrust:abc123def4567890",
+            ctx=ctx,
+        )
+        assert "Forbidden" in result
+
+
+class TestMoltrustStats:
+    @pytest.mark.asyncio
+    async def test_stats_success(self, mock_client):
+        mock_client.http.get = AsyncMock(return_value=make_response(200, {
+            "total_agents": 42,
+            "credentials_issued": 100,
+            "total_ratings": 250,
+        }))
+
+        ctx = make_ctx(mock_client)
+        result = await mcp._tool_manager._tools["moltrust_stats"].fn(
+            ctx=ctx,
+        )
+        assert "42" in result
+        assert "100" in result
+        assert "Total Agents" in result
+
+    @pytest.mark.asyncio
+    async def test_stats_error(self, mock_client):
+        mock_client.http.get = AsyncMock(return_value=make_response(503, {}))
+
+        ctx = make_ctx(mock_client)
+        result = await mcp._tool_manager._tools["moltrust_stats"].fn(
+            ctx=ctx,
+        )
+        assert "Error 503" in result
+
+
+class TestMoltrustDepositHistory:
+    @pytest.mark.asyncio
+    async def test_history_success(self, mock_client):
+        mock_client.http.get = AsyncMock(return_value=make_response(200, {
+            "wallet": "0xWALLET",
+            "network": "Base",
+            "deposits": [
+                {
+                    "usdc_amount": "10.0",
+                    "credits_granted": 1000,
+                    "claimed_at": "2026-01-15T12:00:00Z",
+                    "basescan_url": "https://basescan.org/tx/0x...",
+                },
+            ],
+        }))
+
+        ctx = make_ctx(mock_client)
+        result = await mcp._tool_manager._tools["moltrust_deposit_history"].fn(
+            did="did:moltrust:abc123def4567890",
+            ctx=ctx,
+        )
+        assert "10.0" in result
+        assert "1000" in result
+        assert "0xWALLET" in result
+
+    @pytest.mark.asyncio
+    async def test_history_empty(self, mock_client):
+        mock_client.http.get = AsyncMock(return_value=make_response(200, {
+            "deposits": [],
+        }))
+
+        ctx = make_ctx(mock_client)
+        result = await mcp._tool_manager._tools["moltrust_deposit_history"].fn(
+            did="did:moltrust:abc123def4567890",
+            ctx=ctx,
+        )
+        assert "No USDC deposits" in result
+
+    @pytest.mark.asyncio
+    async def test_history_no_api_key(self, mock_client):
+        mock_client.api_key = ""
+        ctx = make_ctx(mock_client)
+        result = await mcp._tool_manager._tools["moltrust_deposit_history"].fn(
+            did="did:moltrust:abc123def4567890",
+            ctx=ctx,
+        )
+        assert "MOLTRUST_API_KEY" in result
+
+    @pytest.mark.asyncio
+    async def test_history_forbidden(self, mock_client):
+        mock_client.http.get = AsyncMock(return_value=make_response(403, {
+            "detail": "API key does not own this DID",
+        }))
+
+        ctx = make_ctx(mock_client)
+        result = await mcp._tool_manager._tools["moltrust_deposit_history"].fn(
+            did="did:moltrust:abc123def4567890",
+            ctx=ctx,
+        )
+        assert "Forbidden" in result
