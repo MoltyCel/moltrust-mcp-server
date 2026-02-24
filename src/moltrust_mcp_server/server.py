@@ -29,7 +29,7 @@ async def lifespan(server: FastMCP) -> AsyncIterator[MolTrustClient]:
     async with httpx.AsyncClient(
         base_url=api_url,
         timeout=TIMEOUT,
-        headers={"User-Agent": "moltrust-mcp-server/0.2.0"},
+        headers={"User-Agent": "moltrust-mcp-server/0.3.0"},
     ) as http:
         yield MolTrustClient(http=http, api_key=api_key, api_url=api_url)
 
@@ -464,6 +464,160 @@ async def moltrust_credits(
 
     else:
         return 'Error: action must be "balance", "pricing", "transfer", or "transactions".'
+
+
+
+
+@mcp.tool()
+async def moltrust_deposit_info(
+    ctx: Context[ServerSession, MolTrustClient],
+) -> str:
+    """Get USDC deposit instructions to buy MolTrust credits.
+
+    Returns the MolTrust wallet address on Base (Ethereum L2),
+    USDC token contract, conversion rate (1 USDC = 100 credits),
+    and step-by-step instructions.
+    """
+    client = _client(ctx)
+    resp = await client.http.get("/credits/deposit-info")
+
+    if resp.status_code != 200:
+        return f"Error {resp.status_code}: {resp.text}"
+
+    data = resp.json()
+    lines = [
+        "USDC Deposit Instructions",
+        "",
+        f"Wallet:   {data['wallet']}",
+        f"Network:  {data['network']}",
+        f"Token:    {data['token']}",
+        f"Contract: {data['token_contract']}",
+        f"Rate:     {data['rate']}",
+        f"Min conf: {data['min_confirmations']}",
+        "",
+    ]
+    for step in data.get("instructions", []):
+        lines.append(f"  {step}")
+
+    return "\n".join(lines)
+
+
+@mcp.tool()
+async def moltrust_claim_deposit(
+    tx_hash: str,
+    did: str,
+    ctx: Context[ServerSession, MolTrustClient],
+) -> str:
+    """Claim MolTrust credits from a USDC deposit on Base.
+
+    After sending USDC to the MolTrust wallet on Base (L2),
+    submit the transaction hash to receive credits.
+    1 USDC = 100 credits, verified on-chain.
+
+    Args:
+        tx_hash: Base blockchain transaction hash (0x...)
+        did: Your agent's DID to credit
+    """
+    client = _client(ctx)
+    if not client.api_key:
+        return "Error: MOLTRUST_API_KEY environment variable is not set."
+
+    resp = await client.http.post(
+        "/credits/deposit",
+        json={"tx_hash": tx_hash, "did": did},
+        headers=_auth_headers(client),
+    )
+
+    if resp.status_code == 400:
+        return f"Verification failed: {resp.json().get('detail', resp.text)}"
+    if resp.status_code == 403:
+        return f"Forbidden: {resp.json().get('detail', 'API key does not own this DID')}"
+    if resp.status_code == 409:
+        return "This transaction has already been claimed."
+    if resp.status_code != 200:
+        return f"Error {resp.status_code}: {resp.text}"
+
+    data = resp.json()
+    return (
+        f"Deposit successful!\n"
+        f"\n"
+        f"TX:       {data['tx_hash']}\n"
+        f"From:     {data['from_address']}\n"
+        f"USDC:     {data['usdc_amount']}\n"
+        f"Credits:  +{data['credits_granted']}\n"
+        f"Balance:  {data['new_balance']} CREDITS\n"
+        f"Rate:     {data['rate']}\n"
+        f"BaseScan: {data['basescan_url']}"
+    )
+
+
+@mcp.tool()
+async def moltrust_stats(
+    ctx: Context[ServerSession, MolTrustClient],
+) -> str:
+    """Get MolTrust network statistics.
+
+    Returns total registered agents, credentials issued,
+    ratings given, and other network health metrics.
+    """
+    client = _client(ctx)
+    resp = await client.http.get("/stats")
+
+    if resp.status_code != 200:
+        return f"Error {resp.status_code}: {resp.text}"
+
+    data = resp.json()
+    lines = ["MolTrust Network Statistics", ""]
+    for key, value in data.items():
+        label = key.replace("_", " ").title()
+        lines.append(f"  {label}: {value}")
+
+    return "\n".join(lines)
+
+
+@mcp.tool()
+async def moltrust_deposit_history(
+    did: str,
+    ctx: Context[ServerSession, MolTrustClient],
+) -> str:
+    """Get USDC deposit history for an agent.
+
+    Args:
+        did: The agent's DID
+    """
+    client = _client(ctx)
+    if not client.api_key:
+        return "Error: MOLTRUST_API_KEY environment variable is not set."
+
+    resp = await client.http.get(
+        f"/credits/deposits/{did}",
+        headers=_auth_headers(client),
+    )
+
+    if resp.status_code == 403:
+        return f"Forbidden: {resp.json().get('detail', 'API key does not own this DID')}"
+    if resp.status_code != 200:
+        return f"Error {resp.status_code}: {resp.text}"
+
+    data = resp.json()
+    deposits = data.get("deposits", [])
+
+    if not deposits:
+        return f"No USDC deposits found for {did}."
+
+    lines = [
+        f"USDC Deposit History for {did}",
+        f"Wallet: {data.get('wallet', '?')}",
+        f"Network: {data.get('network', '?')}",
+        "",
+    ]
+    for d in deposits:
+        lines.append(
+            f"  {d['usdc_amount']} USDC -> {d['credits_granted']} credits "
+            f"| {d.get('claimed_at', '?')} | {d.get('basescan_url', '')}"
+        )
+
+    return "\n".join(lines)
 
 
 # ---------------------------------------------------------------------------
