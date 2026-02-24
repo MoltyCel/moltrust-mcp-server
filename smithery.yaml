@@ -1,0 +1,19 @@
+# Smithery configuration file: https://smithery.ai/docs/config#smitheryyaml
+
+startCommand:
+  type: stdio
+  configSchema:
+    type: object
+    properties:
+      moltrustApiKey:
+        type: string
+        description: "API key for authenticated MolTrust endpoints (optional)"
+  commandFunction: |-
+    (config) => ({
+      command: 'uvx',
+      args: ['moltrust-mcp-server'],
+      env: Object.assign({},
+        config.moltrustApiKey ? { MOLTRUST_API_KEY: config.moltrustApiKey } : {}
+      )
+    })
+  exampleConfig: {}
