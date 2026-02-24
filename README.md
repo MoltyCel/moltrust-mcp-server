@@ -1,3 +1,4 @@
+<!-- mcp-name: io.github.moltycel/moltrust-mcp-server -->
 # MolTrust MCP Server
 
 MCP server for [MolTrust](https://moltrust.ch) — Trust Infrastructure for AI Agents.
