@@ -29,7 +29,7 @@ async def lifespan(server: FastMCP) -> AsyncIterator[MolTrustClient]:
     async with httpx.AsyncClient(
         base_url=api_url,
         timeout=TIMEOUT,
-        headers={"User-Agent": "moltrust-mcp-server/0.3.1"},
+        headers={"User-Agent": "moltrust-mcp-server/0.3.2"},
     ) as http:
         yield MolTrustClient(http=http, api_key=api_key, api_url=api_url)
 
