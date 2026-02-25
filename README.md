@@ -146,6 +146,12 @@ pyright src/
 pytest tests/ -v
 ```
 
+## Security Research
+
+We regularly scan agent infrastructure for security issues and publish our findings:
+
+- **[We Scanned 50 Agent Endpoints — Here's What We Found](https://moltrust.ch/blog/scanned-50-agent-endpoints.html)** — Common vulnerabilities in the agent ecosystem and how to fix them
+
 ## License
 
 MIT — CryptoKRI GmbH

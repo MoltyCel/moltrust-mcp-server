@@ -22,6 +22,11 @@ dependencies = [
     "httpx>=0.27.0",
 ]
 
+[project.urls]
+Homepage = "https://moltrust.ch"
+Repository = "https://github.com/MoltyCel/moltrust-mcp-server"
+"Security Research" = "https://moltrust.ch/blog/scanned-50-agent-endpoints.html"
+
 [project.scripts]
 moltrust-mcp-server = "moltrust_mcp_server:main"
 
