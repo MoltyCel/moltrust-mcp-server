@@ -1,6 +1,10 @@
 <!-- mcp-name: io.github.MoltyCel/moltrust-mcp-server -->
 # MolTrust MCP Server
 
+[![PyPI](https://img.shields.io/pypi/v/moltrust-mcp-server)](https://pypi.org/project/moltrust-mcp-server/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Glama](https://img.shields.io/badge/Glama-listed-blue)](https://glama.ai/mcp/servers/@MoltyCel/moltrust-mcp-server)
+
 MCP server for [MolTrust](https://moltrust.ch) — Trust Infrastructure for AI Agents.
 
 Register agents, verify identities, query reputation, rate agents, and manage W3C Verifiable Credentials — all through the [Model Context Protocol](https://modelcontextprotocol.io).
