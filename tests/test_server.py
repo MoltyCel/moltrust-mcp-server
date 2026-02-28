@@ -406,3 +406,94 @@ class TestMoltrustDepositHistory:
             ctx=ctx,
         )
         assert "Forbidden" in result
+
+
+class TestMoltrustErc8004:
+    @pytest.mark.asyncio
+    async def test_card_success(self, mock_client):
+        mock_client.http.get = AsyncMock(return_value=make_response(200, {
+            "type": "https://eips.ethereum.org/EIPS/eip-8004#registration-v1",
+            "name": "TestAgent",
+            "description": "AI agent on MolTrust.",
+            "active": True,
+            "services": [
+                {"name": "DID", "endpoint": "did:moltrust:abc123def4567890"},
+                {"name": "web", "endpoint": "https://api.moltrust.ch/identity/resolve/did:moltrust:abc123def4567890"},
+            ],
+            "registrations": [
+                {"agentId": 42, "agentRegistry": "eip155:8453:0x8004A169FB4a3325136EB29fA0ceB6D2e539a432"},
+            ],
+        }))
+
+        ctx = make_ctx(mock_client)
+        result = await mcp._tool_manager._tools["moltrust_erc8004"].fn(
+            action="card", did="did:moltrust:abc123def4567890", ctx=ctx,
+        )
+        assert "TestAgent" in result
+        assert "agentId 42" in result
+        assert "DID" in result
+
+    @pytest.mark.asyncio
+    async def test_card_not_found(self, mock_client):
+        mock_client.http.get = AsyncMock(return_value=make_response(404, {}))
+        ctx = make_ctx(mock_client)
+        result = await mcp._tool_manager._tools["moltrust_erc8004"].fn(
+            action="card", did="did:moltrust:0000000000000000", ctx=ctx,
+        )
+        assert "not found" in result.lower()
+
+    @pytest.mark.asyncio
+    async def test_card_missing_did(self, mock_client):
+        ctx = make_ctx(mock_client)
+        result = await mcp._tool_manager._tools["moltrust_erc8004"].fn(
+            action="card", ctx=ctx,
+        )
+        assert "did is required" in result.lower()
+
+    @pytest.mark.asyncio
+    async def test_resolve_success(self, mock_client):
+        mock_client.http.get = AsyncMock(return_value=make_response(200, {
+            "agent_id": 21023,
+            "chain": "base",
+            "chain_id": 8453,
+            "owner": "0x380238347e58435f40B4da1F1A045A271D5838F5",
+            "agent_wallet": "0x380238347e58435f40B4da1F1A045A271D5838F5",
+            "agent_uri": "https://api.moltrust.ch/agents/did:web:api.moltrust.ch/erc8004",
+            "moltrust_did": "did:moltrust:abc123def4567890",
+            "moltrust_profile": "https://api.moltrust.ch/identity/resolve/did:moltrust:abc123def4567890",
+            "onchain_reputation": {"agent_id": 21023, "count": 0, "summary_value": 0, "decimals": 0, "clients": 0},
+        }))
+
+        ctx = make_ctx(mock_client)
+        result = await mcp._tool_manager._tools["moltrust_erc8004"].fn(
+            action="resolve", agent_id=21023, ctx=ctx,
+        )
+        assert "21023" in result
+        assert "base" in result
+        assert "did:moltrust:abc123def4567890" in result
+        assert "No feedback" in result
+
+    @pytest.mark.asyncio
+    async def test_resolve_not_found(self, mock_client):
+        mock_client.http.get = AsyncMock(return_value=make_response(404, {}))
+        ctx = make_ctx(mock_client)
+        result = await mcp._tool_manager._tools["moltrust_erc8004"].fn(
+            action="resolve", agent_id=99999, ctx=ctx,
+        )
+        assert "not found" in result.lower()
+
+    @pytest.mark.asyncio
+    async def test_resolve_invalid_id(self, mock_client):
+        ctx = make_ctx(mock_client)
+        result = await mcp._tool_manager._tools["moltrust_erc8004"].fn(
+            action="resolve", agent_id=0, ctx=ctx,
+        )
+        assert "agent_id" in result.lower()
+
+    @pytest.mark.asyncio
+    async def test_invalid_action(self, mock_client):
+        ctx = make_ctx(mock_client)
+        result = await mcp._tool_manager._tools["moltrust_erc8004"].fn(
+            action="foo", ctx=ctx,
+        )
+        assert "card" in result and "resolve" in result

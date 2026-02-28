@@ -29,7 +29,7 @@ async def lifespan(server: FastMCP) -> AsyncIterator[MolTrustClient]:
     async with httpx.AsyncClient(
         base_url=api_url,
         timeout=TIMEOUT,
-        headers={"User-Agent": "moltrust-mcp-server/0.3.2"},
+        headers={"User-Agent": "moltrust-mcp-server/0.4.0"},
     ) as http:
         yield MolTrustClient(http=http, api_key=api_key, api_url=api_url)
 
@@ -39,7 +39,8 @@ mcp = FastMCP(
     instructions=(
         "MolTrust — Trust Infrastructure for AI Agents. "
         "Register agents, verify identities, query reputation scores, "
-        "rate agents, and manage W3C Verifiable Credentials."
+        "rate agents, manage W3C Verifiable Credentials, and query "
+        "ERC-8004 on-chain agent registries on Base."
     ),
     lifespan=lifespan,
 )
@@ -621,6 +622,103 @@ async def moltrust_deposit_history(
         )
 
     return "\n".join(lines)
+
+
+@mcp.tool()
+async def moltrust_erc8004(
+    action: str,
+    did: str = "",
+    agent_id: int = 0,
+    ctx: Context[ServerSession, MolTrustClient] = None,
+) -> str:
+    """Query the ERC-8004 on-chain agent registry on Base.
+
+    Resolve MolTrust agents to their on-chain ERC-8004 identity, fetch Agent Cards,
+    or look up on-chain agents by their agentId.
+
+    Args:
+        action: One of "card", "resolve", or "well-known"
+        did: Agent DID (required for "card", e.g. "did:moltrust:a1b2c3d4e5f60718")
+        agent_id: On-chain ERC-8004 agent ID (required for "resolve", e.g. 21023)
+    """
+    client = _client(ctx)
+
+    if action == "card":
+        if not did:
+            return "Error: did is required for fetching an Agent Card."
+        resp = await client.http.get(f"/agents/{did}/erc8004")
+        if resp.status_code == 404:
+            return f"Agent not found: {did}"
+        if resp.status_code != 200:
+            return f"Error {resp.status_code}: {resp.text}"
+
+        data = resp.json()
+        regs = data.get("registrations", [])
+        services = data.get("services", [])
+
+        lines = [
+            "ERC-8004 Agent Card",
+            "",
+            f"Name:   {data.get('name', '?')}",
+            f"Type:   {data.get('type', '?')}",
+            f"Active: {'Yes' if data.get('active') else 'No'}",
+        ]
+        if data.get("description"):
+            lines.append(f"Info:   {data['description']}")
+        if services:
+            lines.append("")
+            lines.append("Services:")
+            for svc in services:
+                lines.append(f"  {svc.get('name', '?')}: {svc.get('endpoint', '?')}")
+        if regs:
+            lines.append("")
+            lines.append("On-chain registrations:")
+            for reg in regs:
+                lines.append(f"  agentId {reg.get('agentId')} on {reg.get('agentRegistry', '?')}")
+        return "\n".join(lines)
+
+    elif action == "resolve":
+        if agent_id < 1:
+            return "Error: agent_id (>= 1) is required for resolving an on-chain agent."
+        resp = await client.http.get(f"/resolve/erc8004/{agent_id}")
+        if resp.status_code == 404:
+            return f"Agent ID {agent_id} not found on ERC-8004 IdentityRegistry."
+        if resp.status_code != 200:
+            return f"Error {resp.status_code}: {resp.text}"
+
+        data = resp.json()
+        rep = data.get("onchain_reputation", {})
+
+        lines = [
+            "ERC-8004 On-Chain Agent",
+            "",
+            f"Agent ID: {data.get('agent_id')}",
+            f"Chain:    {data.get('chain')} (ID {data.get('chain_id')})",
+            f"Owner:    {data.get('owner')}",
+            f"Wallet:   {data.get('agent_wallet')}",
+        ]
+        if data.get("agent_uri"):
+            lines.append(f"URI:      {data['agent_uri']}")
+        if data.get("moltrust_did"):
+            lines.append(f"")
+            lines.append(f"MolTrust DID:     {data['moltrust_did']}")
+            lines.append(f"MolTrust Profile: {data.get('moltrust_profile', '?')}")
+        if rep and rep.get("count", 0) > 0:
+            lines.append(f"")
+            lines.append(f"On-chain reputation: value={rep['summary_value']} ({rep['count']} feedbacks, {rep.get('clients', 0)} clients)")
+        elif rep:
+            lines.append(f"")
+            lines.append(f"On-chain reputation: No feedback yet")
+        return "\n".join(lines)
+
+    elif action == "well-known":
+        resp = await client.http.get("/.well-known/agent-registration.json")
+        if resp.status_code != 200:
+            return f"Error {resp.status_code}: {resp.text}"
+        return _fmt(resp.json())
+
+    else:
+        return 'Error: action must be "card", "resolve", or "well-known".'
 
 
 # ---------------------------------------------------------------------------
