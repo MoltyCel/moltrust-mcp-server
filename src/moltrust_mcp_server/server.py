@@ -101,8 +101,8 @@ async def moltrust_register(
     tx = anchor.get("tx_hash") if anchor else None
 
     lines = [
-        f"Agent registered successfully!",
-        f"",
+        "Agent registered successfully!",
+        "",
         f"DID:      {did}",
         f"Name:     {data.get('display_name')}",
         f"Status:   {data.get('status')}",
@@ -112,7 +112,7 @@ async def moltrust_register(
 
     cred = data.get("credential")
     if cred:
-        lines.append(f"")
+        lines.append("")
         lines.append(f"Credential issued: {', '.join(cred.get('type', []))}")
         lines.append(f"Issuer:    {cred.get('issuer')}")
         lines.append(f"Expires:   {cred.get('expirationDate')}")
@@ -142,7 +142,7 @@ async def moltrust_verify(
     )
 
     if verify_resp.status_code == 400:
-        return f"Invalid DID format. Expected: did:moltrust:<16 hex chars>"
+        return "Invalid DID format. Expected: did:moltrust:<16 hex chars>"
     if verify_resp.status_code != 200:
         return f"Error {verify_resp.status_code}: {verify_resp.text}"
 
@@ -253,7 +253,7 @@ async def moltrust_credential(
     subject_did: str = "",
     credential_type: str = "AgentTrustCredential",
     credential: str = "",
-    ctx: Context[ServerSession, MolTrustClient] = None,
+    ctx: Context[ServerSession, MolTrustClient] | None = None,
 ) -> str:
     """Issue or verify a W3C Verifiable Credential.
 
@@ -263,6 +263,7 @@ async def moltrust_credential(
         credential_type: Type of credential (default: "AgentTrustCredential", only for "issue")
         credential: JSON string of the credential to verify (required for "verify")
     """
+    assert ctx is not None
     client = _client(ctx)
 
     if action == "issue":
@@ -344,7 +345,7 @@ async def moltrust_credits(
     reference: str = "",
     limit: int = 20,
     offset: int = 0,
-    ctx: Context[ServerSession, MolTrustClient] = None,
+    ctx: Context[ServerSession, MolTrustClient] | None = None,
 ) -> str:
     """Manage MolTrust credits: check balance, view pricing, transfer credits, or view transaction history.
 
@@ -357,6 +358,7 @@ async def moltrust_credits(
         limit: Max transactions to return (default 20, for "transactions")
         offset: Pagination offset (default 0, for "transactions")
     """
+    assert ctx is not None
     client = _client(ctx)
 
     if action == "balance":
@@ -629,7 +631,7 @@ async def moltrust_erc8004(
     action: str,
     did: str = "",
     agent_id: int = 0,
-    ctx: Context[ServerSession, MolTrustClient] = None,
+    ctx: Context[ServerSession, MolTrustClient] | None = None,
 ) -> str:
     """Query the ERC-8004 on-chain agent registry on Base.
 
@@ -641,6 +643,7 @@ async def moltrust_erc8004(
         did: Agent DID (required for "card", e.g. "did:moltrust:a1b2c3d4e5f60718")
         agent_id: On-chain ERC-8004 agent ID (required for "resolve", e.g. 21023)
     """
+    assert ctx is not None
     client = _client(ctx)
 
     if action == "card":
@@ -700,15 +703,15 @@ async def moltrust_erc8004(
         if data.get("agent_uri"):
             lines.append(f"URI:      {data['agent_uri']}")
         if data.get("moltrust_did"):
-            lines.append(f"")
+            lines.append("")
             lines.append(f"MolTrust DID:     {data['moltrust_did']}")
             lines.append(f"MolTrust Profile: {data.get('moltrust_profile', '?')}")
         if rep and rep.get("count", 0) > 0:
-            lines.append(f"")
+            lines.append("")
             lines.append(f"On-chain reputation: value={rep['summary_value']} ({rep['count']} feedbacks, {rep.get('clients', 0)} clients)")
         elif rep:
-            lines.append(f"")
-            lines.append(f"On-chain reputation: No feedback yet")
+            lines.append("")
+            lines.append("On-chain reputation: No feedback yet")
         return "\n".join(lines)
 
     elif action == "well-known":
