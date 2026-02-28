@@ -157,12 +157,14 @@ async def moltrust_verify(
     if card_resp.status_code == 200:
         card = card_resp.json()
         trust = card.get("trust", {})
-        lines.extend([
-            f"Name:     {card.get('name', '?')}",
-            f"Platform: {card.get('platform', '?')}",
-            f"Score:    {trust.get('score', 0)}/5 ({trust.get('totalRatings', 0)} ratings)",
-            f"On-chain: {'Yes' if trust.get('baseAnchor') else 'No'}",
-        ])
+        lines.extend(
+            [
+                f"Name:     {card.get('name', '?')}",
+                f"Platform: {card.get('platform', '?')}",
+                f"Score:    {trust.get('score', 0)}/5 ({trust.get('totalRatings', 0)} ratings)",
+                f"On-chain: {'Yes' if trust.get('baseAnchor') else 'No'}",
+            ]
+        )
         if trust.get("registeredAt"):
             lines.append(f"Registered: {trust['registeredAt']}")
         if trust.get("baseScanUrl"):
@@ -295,7 +297,9 @@ async def moltrust_credential(
             f"Expires: {cred.get('expirationDate')}",
         ]
         if rep:
-            lines.append(f"Score:   {rep.get('score', 0)}/5 ({rep.get('total_ratings', 0)} ratings)")
+            lines.append(
+                f"Score:   {rep.get('score', 0)}/5 ({rep.get('total_ratings', 0)} ratings)"
+            )
         lines.extend(["", "Full credential:", _fmt(cred)])
         return "\n".join(lines)
 
@@ -411,7 +415,12 @@ async def moltrust_credits(
 
         resp = await client.http.post(
             "/credits/transfer",
-            json={"from_did": did, "to_did": to_did, "amount": amount, "reference": reference},
+            json={
+                "from_did": did,
+                "to_did": to_did,
+                "amount": amount,
+                "reference": reference,
+            },
             headers=_auth_headers(client),
         )
         if resp.status_code == 402:
@@ -466,8 +475,9 @@ async def moltrust_credits(
         return "\n".join(lines)
 
     else:
-        return 'Error: action must be "balance", "pricing", "transfer", or "transactions".'
-
+        return (
+            'Error: action must be "balance", "pricing", "transfer", or "transactions".'
+        )
 
 
 @mcp.tool()
@@ -537,7 +547,9 @@ async def moltrust_claim_deposit(
     if resp.status_code == 400:
         return f"Verification failed: {resp.json().get('detail', resp.text)}"
     if resp.status_code == 403:
-        return f"Forbidden: {resp.json().get('detail', 'API key does not own this DID')}"
+        return (
+            f"Forbidden: {resp.json().get('detail', 'API key does not own this DID')}"
+        )
     if resp.status_code == 409:
         return "This transaction has already been claimed."
     if resp.status_code != 200:
@@ -601,7 +613,9 @@ async def moltrust_deposit_history(
     )
 
     if resp.status_code == 403:
-        return f"Forbidden: {resp.json().get('detail', 'API key does not own this DID')}"
+        return (
+            f"Forbidden: {resp.json().get('detail', 'API key does not own this DID')}"
+        )
     if resp.status_code != 200:
         return f"Error {resp.status_code}: {resp.text}"
 
@@ -677,7 +691,9 @@ async def moltrust_erc8004(
             lines.append("")
             lines.append("On-chain registrations:")
             for reg in regs:
-                lines.append(f"  agentId {reg.get('agentId')} on {reg.get('agentRegistry', '?')}")
+                lines.append(
+                    f"  agentId {reg.get('agentId')} on {reg.get('agentRegistry', '?')}"
+                )
         return "\n".join(lines)
 
     elif action == "resolve":
@@ -708,7 +724,9 @@ async def moltrust_erc8004(
             lines.append(f"MolTrust Profile: {data.get('moltrust_profile', '?')}")
         if rep and rep.get("count", 0) > 0:
             lines.append("")
-            lines.append(f"On-chain reputation: value={rep['summary_value']} ({rep['count']} feedbacks, {rep.get('clients', 0)} clients)")
+            lines.append(
+                f"On-chain reputation: value={rep['summary_value']} ({rep['count']} feedbacks, {rep.get('clients', 0)} clients)"
+            )
         elif rep:
             lines.append("")
             lines.append("On-chain reputation: No feedback yet")
@@ -728,15 +746,18 @@ async def moltrust_erc8004(
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 async def gather_requests(*coros):
     """Run multiple httpx requests concurrently."""
     import asyncio
+
     return await asyncio.gather(*coros)
 
 
 # ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
+
 
 def main():
     mcp.run(transport="stdio")
