@@ -7,9 +7,11 @@
 
 MCP server for [MolTrust](https://moltrust.ch) — Trust Infrastructure for AI Agents.
 
-Register agents, verify identities, query reputation, rate agents, and manage W3C Verifiable Credentials — all through the [Model Context Protocol](https://modelcontextprotocol.io).
+27 tools across 5 verticals: identity, on-chain trust scoring, prediction market integrity, autonomous commerce, and agent skill verification — all through the [Model Context Protocol](https://modelcontextprotocol.io).
 
 ## Tools
+
+### Identity & Credentials (11 tools)
 
 | Tool | Description |
 |------|-------------|
@@ -18,7 +20,48 @@ Register agents, verify identities, query reputation, rate agents, and manage W3
 | `moltrust_reputation` | Get reputation score (1-5) and total ratings for a DID. |
 | `moltrust_rate` | Rate another agent (1-5 stars). |
 | `moltrust_credential` | Issue or verify a W3C Verifiable Credential. |
-| `moltrust_credits` | Check balance, view pricing, transfer credits, or view transaction history. |
+| `moltrust_credits` | Check balance, view pricing, transfer credits, or view history. |
+| `moltrust_deposit_info` | Get USDC deposit instructions (Base L2). |
+| `moltrust_claim_deposit` | Claim credits from a USDC deposit on Base. |
+| `moltrust_stats` | Get MolTrust network statistics. |
+| `moltrust_deposit_history` | Get USDC deposit history for an agent. |
+| `moltrust_erc8004` | Query the ERC-8004 on-chain agent registry on Base. |
+
+### MoltGuard — Agent Trust Scoring (7 tools)
+
+| Tool | Description |
+|------|-------------|
+| `moltguard_score` | Get a 0-100 trust score for a Base wallet address. |
+| `moltguard_detail` | Get a detailed trust report with full scoring breakdown. |
+| `moltguard_sybil` | Scan a wallet for Sybil indicators and funding clusters. |
+| `moltguard_market` | Check a Polymarket market for integrity anomalies. |
+| `moltguard_feed` | Get the top anomaly feed — markets with highest concerns. |
+| `moltguard_credential_issue` | Issue an AgentTrustCredential (W3C VC) for a wallet. |
+| `moltguard_credential_verify` | Verify a MoltGuard credential JWS signature. |
+
+### MT Shopping — Autonomous Commerce (3 tools)
+
+| Tool | Description |
+|------|-------------|
+| `mt_shopping_info` | Get MT Shopping API info and BuyerAgentCredential schema. |
+| `mt_shopping_verify` | Verify a shopping transaction against a BuyerAgentCredential. |
+| `mt_shopping_issue_vc` | Issue a BuyerAgentCredential with spend limits. |
+
+### MT Travel — Booking Trust (3 tools)
+
+| Tool | Description |
+|------|-------------|
+| `mt_travel_info` | Get MT Travel service info and supported segments. |
+| `mt_travel_verify` | Verify a travel booking against a TravelAgentCredential. |
+| `mt_travel_issue_vc` | Issue a TravelAgentCredential with segment permissions. |
+
+### MT Skills — Agent Skill Verification (3 tools)
+
+| Tool | Description |
+|------|-------------|
+| `mt_skill_audit` | Audit a SKILL.md for prompt injection, exfiltration, scope violations. |
+| `mt_skill_verify` | Verify a skill by its canonical SHA-256 hash. |
+| `mt_skill_issue_vc` | Issue a VerifiedSkillCredential after security audit. |
 
 ## Setup
 
@@ -126,11 +169,13 @@ Once connected, you can ask your AI assistant:
 - "Register a new agent called 'my-assistant' on the 'openai' platform"
 - "Verify the agent with DID did:moltrust:a1b2c3d4e5f60718"
 - "What's the reputation of did:moltrust:a1b2c3d4e5f60718?"
-- "Rate agent did:moltrust:b2c3d4e5f6071890 with 5 stars from did:moltrust:a1b2c3d4e5f60718"
-- "Issue a credential for did:moltrust:a1b2c3d4e5f60718"
-- "Check my credit balance for did:moltrust:a1b2c3d4e5f60718"
-- "Show API pricing"
-- "Transfer 10 credits from did:moltrust:a1b2c3d4e5f60718 to did:moltrust:b2c3d4e5f6071890"
+- "Rate agent did:moltrust:b2c3d4e5f6071890 with 5 stars"
+- "Get the trust score for wallet 0x1234...abcd"
+- "Scan wallet 0x1234...abcd for Sybil indicators"
+- "Check Polymarket market abc123 for anomalies"
+- "Issue a BuyerAgentCredential for my shopping agent"
+- "Verify this travel booking against the agent's credential"
+- "Audit this agent skill for security risks: https://github.com/example/skill"
 
 ## Development
 
