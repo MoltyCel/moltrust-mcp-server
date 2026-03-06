@@ -890,7 +890,9 @@ async def moltguard_feed(
     data = resp.json()
     lines = [f"Scanned: {data['totalScanned']} markets", ""]
     for m in data.get("markets", []):
-        lines.append(f"  [{m['anomalyScore']}] {m.get('marketQuestion', m['marketId'])[:60]}")
+        lines.append(
+            f"  [{m['anomalyScore']}] {m.get('marketQuestion', m['marketId'])[:60]}"
+        )
     if not data.get("markets"):
         lines.append("  No anomalies detected in top markets.")
     return "\n".join(lines)
@@ -1009,7 +1011,9 @@ async def mt_shopping_verify(
         f"Guard Score: {data.get('guardScore', 'N/A')}/100",
     ]
     if data.get("receiptId"):
-        lines.append(f"Receipt URL: {client.api_url}/guard/shopping/receipt/{data['receiptId']}")
+        lines.append(
+            f"Receipt URL: {client.api_url}/guard/shopping/receipt/{data['receiptId']}"
+        )
     return "\n".join(lines)
 
 
@@ -1137,7 +1141,9 @@ async def mt_travel_verify(
         f"Guard Score: {data.get('guardScore', 'N/A')}/100",
     ]
     if data.get("receiptId"):
-        lines.append(f"Receipt: {client.api_url}/guard/travel/receipt/{data['receiptId']}")
+        lines.append(
+            f"Receipt: {client.api_url}/guard/travel/receipt/{data['receiptId']}"
+        )
     if data.get("tripId"):
         lines.append(f"Trip ID: {data['tripId']}")
     if data.get("reason"):
