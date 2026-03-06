@@ -2,7 +2,6 @@
 
 import json
 import os
-import urllib.parse
 from contextlib import asynccontextmanager
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
