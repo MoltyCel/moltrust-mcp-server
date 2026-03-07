@@ -1343,7 +1343,7 @@ async def mt_prediction_link(
     address: str,
     platform: str = "polymarket",
     did: str = "",
-    ctx: Context[ServerSession, MolTrustClient] | None = None,
+    ctx: Context[ServerSession, MolTrustClient] = None,
 ) -> str:
     """Link a prediction market wallet and sync its track record.
 
@@ -1447,7 +1447,7 @@ async def mt_prediction_wallet(
 @mcp.tool()
 async def mt_prediction_leaderboard(
     limit: int = 20,
-    ctx: Context[ServerSession, MolTrustClient] | None = None,
+    ctx: Context[ServerSession, MolTrustClient] = None,
 ) -> str:
     """Get the prediction market leaderboard — top wallets by prediction score.
 
