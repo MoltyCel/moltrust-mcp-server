@@ -858,3 +858,175 @@ class TestMoltrustErc8004:
             action="foo", ctx=ctx,
         )
         assert "card" in result and "resolve" in result
+
+
+class TestMtPrediction:
+    @pytest.mark.asyncio
+    async def test_prediction_link_success(self, mock_client):
+        mock_client.http.post = AsyncMock(return_value=make_response(200, {
+            "address": "0x1234567890abcdef1234567890abcdef12345678",
+            "platform": "polymarket",
+            "predictionScore": 72,
+            "totalBets": 48,
+            "wins": 31,
+            "losses": 17,
+            "totalVolume": 25430.50,
+            "netPnl": 3210.75,
+            "synced": True,
+        }))
+        ctx = make_ctx(mock_client)
+        result = await mcp._tool_manager._tools["mt_prediction_link"].fn(
+            address="0x1234567890abcdef1234567890abcdef12345678",
+            ctx=ctx,
+        )
+        assert "Wallet linked" in result
+        assert "72/100" in result
+        assert "31W" in result
+        assert "25,430.50" in result
+        assert "Synced: Yes" in result
+
+    @pytest.mark.asyncio
+    async def test_prediction_link_invalid_address(self, mock_client):
+        mock_client.http.post = AsyncMock(return_value=make_response(400, {
+            "error": "Invalid wallet address",
+        }))
+        ctx = make_ctx(mock_client)
+        result = await mcp._tool_manager._tools["mt_prediction_link"].fn(
+            address="not-an-address",
+            ctx=ctx,
+        )
+        assert "Error 400" in result
+
+    @pytest.mark.asyncio
+    async def test_prediction_link_sync_failed(self, mock_client):
+        mock_client.http.post = AsyncMock(return_value=make_response(200, {
+            "address": "0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef",
+            "platform": "polymarket",
+            "predictionScore": 0,
+            "totalBets": 0,
+            "synced": False,
+        }))
+        ctx = make_ctx(mock_client)
+        result = await mcp._tool_manager._tools["mt_prediction_link"].fn(
+            address="0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef",
+            ctx=ctx,
+        )
+        assert "0/100" in result
+        assert "No (no Polymarket data found)" in result
+
+    @pytest.mark.asyncio
+    async def test_prediction_wallet_success(self, mock_client):
+        mock_client.http.get = AsyncMock(return_value=make_response(200, {
+            "address": "0x1234567890abcdef1234567890abcdef12345678",
+            "platform": "polymarket",
+            "predictionScore": 85,
+            "scoreBreakdown": {"winRate": 90, "roi": 75, "volume": 80, "sampleSize": 95, "recency": 100},
+            "wins": 42,
+            "losses": 8,
+            "totalBets": 50,
+            "totalVolume": 102500.00,
+            "netPnl": 18200.50,
+            "linked_did": "did:moltrust:abc123def4567890",
+            "lastSynced": "2026-03-06T12:00:00Z",
+            "recentEvents": [
+                {"question": "Will BTC reach $100k by June 2026?", "position": "YES", "amountIn": 500.0},
+                {"question": "Will ETH merge succeed?", "position": "NO", "amountIn": 250.0},
+            ],
+        }))
+        ctx = make_ctx(mock_client)
+        result = await mcp._tool_manager._tools["mt_prediction_wallet"].fn(
+            address="0x1234567890abcdef1234567890abcdef12345678",
+            ctx=ctx,
+        )
+        assert "85/100" in result
+        assert "WinRate=90" in result
+        assert "42W" in result
+        assert "did:moltrust:abc123def4567890" in result
+        assert "BTC" in result
+
+    @pytest.mark.asyncio
+    async def test_prediction_wallet_not_found(self, mock_client):
+        mock_client.http.get = AsyncMock(return_value=make_response(404, {
+            "error": "Wallet not found",
+        }))
+        ctx = make_ctx(mock_client)
+        result = await mcp._tool_manager._tools["mt_prediction_wallet"].fn(
+            address="0x0000000000000000000000000000000000000000",
+            ctx=ctx,
+        )
+        assert "Error 404" in result
+
+    @pytest.mark.asyncio
+    async def test_prediction_leaderboard_entries(self, mock_client):
+        mock_client.http.get = AsyncMock(return_value=make_response(200, {
+            "entries": [
+                {"rank": 1, "address": "0xaaaa1111bbbb2222cccc3333dddd4444eeee5555", "predictionScore": 95, "wins": 60, "losses": 5, "totalVolume": 500000, "netPnl": 80000},
+                {"rank": 2, "address": "0xbbbb2222cccc3333dddd4444eeee5555ffff6666", "predictionScore": 88, "wins": 45, "losses": 10, "totalVolume": 250000, "netPnl": 42000},
+            ],
+        }))
+        ctx = make_ctx(mock_client)
+        result = await mcp._tool_manager._tools["mt_prediction_leaderboard"].fn(ctx=ctx)
+        assert "#1" in result
+        assert "#2" in result
+        assert "Score:95" in result
+        assert "top 2" in result
+
+    @pytest.mark.asyncio
+    async def test_prediction_leaderboard_empty(self, mock_client):
+        mock_client.http.get = AsyncMock(return_value=make_response(200, {
+            "entries": [],
+        }))
+        ctx = make_ctx(mock_client)
+        result = await mcp._tool_manager._tools["mt_prediction_leaderboard"].fn(ctx=ctx)
+        assert "No entries" in result
+
+    @pytest.mark.asyncio
+    async def test_prediction_leaderboard_limit(self, mock_client):
+        mock_client.http.get = AsyncMock(return_value=make_response(200, {
+            "entries": [
+                {"rank": 1, "address": "0xaaaa1111bbbb2222cccc3333dddd4444eeee5555", "predictionScore": 90, "wins": 50, "losses": 10, "totalVolume": 300000, "netPnl": 50000},
+            ],
+        }))
+        ctx = make_ctx(mock_client)
+        result = await mcp._tool_manager._tools["mt_prediction_leaderboard"].fn(
+            limit=5, ctx=ctx,
+        )
+        assert "top 1" in result
+        mock_client.http.get.assert_called_once()
+        call_kwargs = mock_client.http.get.call_args
+        assert call_kwargs[1]["params"]["limit"] == "5"
+
+    @pytest.mark.asyncio
+    async def test_prediction_link_with_did(self, mock_client):
+        mock_client.http.post = AsyncMock(return_value=make_response(200, {
+            "address": "0xabcdef1234567890abcdef1234567890abcdef12",
+            "platform": "polymarket",
+            "predictionScore": 65,
+            "totalBets": 30,
+            "wins": 18,
+            "losses": 12,
+            "linked_did": "did:moltrust:a1b2c3d4e5f60718",
+            "synced": True,
+        }))
+        ctx = make_ctx(mock_client)
+        result = await mcp._tool_manager._tools["mt_prediction_link"].fn(
+            address="0xabcdef1234567890abcdef1234567890abcdef12",
+            did="did:moltrust:a1b2c3d4e5f60718",
+            ctx=ctx,
+        )
+        assert "did:moltrust:a1b2c3d4e5f60718" in result
+        assert "65/100" in result
+        call_kwargs = mock_client.http.post.call_args
+        assert call_kwargs[1]["json"]["did"] == "did:moltrust:a1b2c3d4e5f60718"
+
+    @pytest.mark.asyncio
+    async def test_prediction_wallet_error(self, mock_client):
+        mock_client.http.get = AsyncMock(return_value=make_response(500, {
+            "error": "Internal server error",
+        }))
+        ctx = make_ctx(mock_client)
+        result = await mcp._tool_manager._tools["mt_prediction_wallet"].fn(
+            address="0x1234567890abcdef1234567890abcdef12345678",
+            ctx=ctx,
+        )
+        assert "Error 500" in result

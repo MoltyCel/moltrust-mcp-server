@@ -7,7 +7,7 @@
 
 MCP server for [MolTrust](https://moltrust.ch) — Trust Infrastructure for AI Agents.
 
-27 tools across 5 verticals: identity, on-chain trust scoring, prediction market integrity, autonomous commerce, and agent skill verification — all through the [Model Context Protocol](https://modelcontextprotocol.io).
+30 tools across 6 verticals: identity, on-chain trust scoring, prediction market track records, prediction market integrity, autonomous commerce, and agent skill verification — all through the [Model Context Protocol](https://modelcontextprotocol.io).
 
 ## Tools
 
@@ -62,6 +62,14 @@ MCP server for [MolTrust](https://moltrust.ch) — Trust Infrastructure for AI A
 | `mt_skill_audit` | Audit a SKILL.md for prompt injection, exfiltration, scope violations. |
 | `mt_skill_verify` | Verify a skill by its canonical SHA-256 hash. |
 | `mt_skill_issue_vc` | Issue a VerifiedSkillCredential after security audit. |
+
+### MT Prediction — Market Track Records (3 tools)
+
+| Tool | Description |
+|------|-------------|
+| `mt_prediction_link` | Link a prediction market wallet and sync its track record. |
+| `mt_prediction_wallet` | Get prediction market profile, score, and recent events. |
+| `mt_prediction_leaderboard` | Get the prediction market leaderboard — top wallets by score. |
 
 ## Setup
 
@@ -176,6 +184,8 @@ Once connected, you can ask your AI assistant:
 - "Issue a BuyerAgentCredential for my shopping agent"
 - "Verify this travel booking against the agent's credential"
 - "Audit this agent skill for security risks: https://github.com/example/skill"
+- "Link my Polymarket wallet 0x1234...abcd and show my prediction score"
+- "Show the prediction market leaderboard"
 
 ## Development
 
