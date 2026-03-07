@@ -1343,7 +1343,7 @@ async def mt_prediction_link(
     address: str,
     platform: str = "polymarket",
     did: str = "",
-    ctx: Context[ServerSession, MolTrustClient] = None,
+    ctx: Context[ServerSession, MolTrustClient] | None = None,
 ) -> str:
     """Link a prediction market wallet and sync its track record.
 
@@ -1355,6 +1355,7 @@ async def mt_prediction_link(
         platform: Platform name (default: "polymarket")
         did: Optional MolTrust DID to link (e.g. "did:moltrust:a1b2c3d4e5f60718")
     """
+    assert ctx is not None
     client = _client(ctx)
     body: dict = {"address": address, "platform": platform}
     if did:
@@ -1447,7 +1448,7 @@ async def mt_prediction_wallet(
 @mcp.tool()
 async def mt_prediction_leaderboard(
     limit: int = 20,
-    ctx: Context[ServerSession, MolTrustClient] = None,
+    ctx: Context[ServerSession, MolTrustClient] | None = None,
 ) -> str:
     """Get the prediction market leaderboard — top wallets by prediction score.
 
@@ -1457,6 +1458,7 @@ async def mt_prediction_leaderboard(
     Args:
         limit: Number of entries to return (default 20, max 100)
     """
+    assert ctx is not None
     client = _client(ctx)
     resp = await client.http.get(
         f"{GUARD_PREFIX}/prediction/leaderboard",
