@@ -13,7 +13,7 @@ from mcp.server.session import ServerSession
 API_URL_DEFAULT = "https://api.moltrust.ch"
 GUARD_PREFIX = "/guard"
 TIMEOUT = 30.0
-VERSION = "0.5.0"
+VERSION = "0.6.0"
 
 
 @dataclass
@@ -44,6 +44,7 @@ mcp = FastMCP(
         "rate agents, manage W3C Verifiable Credentials, query "
         "ERC-8004 on-chain agent registries on Base, score wallet trust, "
         "detect Sybil wallets, check prediction market integrity, "
+        "track prediction market wallet performance and leaderboards, "
         "verify shopping/travel/skill credentials, and audit agent skills."
     ),
     lifespan=lifespan,
@@ -1329,6 +1330,161 @@ async def mt_skill_issue_vc(
         f"Expires: {data['expirationDate']}",
         f"Anchor TX: {sub.get('anchorTx', 'N/A')}",
     ]
+    return "\n".join(lines)
+
+
+# ---------------------------------------------------------------------------
+# MT Prediction Tools — Prediction Market Track Records
+# ---------------------------------------------------------------------------
+
+
+@mcp.tool()
+async def mt_prediction_link(
+    address: str,
+    platform: str = "polymarket",
+    did: str = "",
+    ctx: Context[ServerSession, MolTrustClient] | None = None,
+) -> str:
+    """Link a prediction market wallet and sync its track record.
+
+    Fetches trade history from Polymarket, calculates a prediction score (0-100),
+    and stores the wallet profile. Optionally links it to a MolTrust DID.
+
+    Args:
+        address: Prediction market wallet address (0x-prefixed, 42 chars)
+        platform: Platform name (default: "polymarket")
+        did: Optional MolTrust DID to link (e.g. "did:moltrust:a1b2c3d4e5f60718")
+    """
+    client = _client(ctx)
+    body: dict = {"address": address, "platform": platform}
+    if did:
+        body["did"] = did
+    resp = await client.http.post(
+        f"{GUARD_PREFIX}/prediction/wallet-link",
+        json=body,
+    )
+    if resp.status_code != 200:
+        return f"Error {resp.status_code}: {resp.text}"
+    data = resp.json()
+    if "error" in data:
+        return f"Error: {data['error']}"
+    lines = [
+        f"Wallet linked: {data.get('address', address)}",
+        f"Platform: {data.get('platform', platform)}",
+        f"Prediction Score: {data.get('predictionScore', 0)}/100",
+        f"Total Bets: {data.get('totalBets', 0)}",
+    ]
+    if data.get("wins") is not None:
+        lines.append(f"Record: {data['wins']}W / {data.get('losses', 0)}L")
+    if data.get("totalVolume"):
+        lines.append(f"Volume: ${data['totalVolume']:,.2f} USDC")
+    if data.get("netPnl") is not None:
+        lines.append(f"Net P&L: ${data['netPnl']:+,.2f} USDC")
+    if data.get("linked_did"):
+        lines.append(f"Linked DID: {data['linked_did']}")
+    lines.append(
+        f"Synced: {'Yes' if data.get('synced') else 'No (no Polymarket data found)'}"
+    )
+    return "\n".join(lines)
+
+
+@mcp.tool()
+async def mt_prediction_wallet(
+    address: str,
+    ctx: Context[ServerSession, MolTrustClient],
+) -> str:
+    """Get prediction market profile and track record for a wallet.
+
+    Returns the prediction score (0-100), win/loss record, volume, ROI,
+    score breakdown, and recent market events.
+
+    Args:
+        address: Prediction market wallet address (0x-prefixed, 42 chars)
+    """
+    client = _client(ctx)
+    resp = await client.http.get(
+        f"{GUARD_PREFIX}/prediction/wallet/{address}",
+    )
+    if resp.status_code != 200:
+        return f"Error {resp.status_code}: {resp.text}"
+    data = resp.json()
+    if "error" in data:
+        return f"Error: {data['error']}"
+    lines = [
+        f"Prediction Wallet: {data['address']}",
+        f"Platform: {data.get('platform', 'polymarket')}",
+        f"Prediction Score: {data.get('predictionScore', 0)}/100",
+    ]
+    bd = data.get("scoreBreakdown", {})
+    if bd:
+        lines.append(
+            f"  Breakdown: WinRate={bd.get('winRate', 0)} "
+            f"ROI={bd.get('roi', 0)} Volume={bd.get('volume', 0)} "
+            f"Sample={bd.get('sampleSize', 0)} Recency={bd.get('recency', 0)}"
+        )
+    lines.append(f"Record: {data.get('wins', 0)}W / {data.get('losses', 0)}L")
+    lines.append(f"Total Bets: {data.get('totalBets', 0)}")
+    if data.get("totalVolume"):
+        lines.append(f"Volume: ${data['totalVolume']:,.2f} USDC")
+    if data.get("netPnl") is not None:
+        lines.append(f"Net P&L: ${data['netPnl']:+,.2f} USDC")
+    if data.get("linked_did"):
+        lines.append(f"DID: {data['linked_did']}")
+    if data.get("lastSynced"):
+        lines.append(f"Last Synced: {data['lastSynced']}")
+    events = data.get("recentEvents", [])
+    if events:
+        lines.append(f"\nRecent Events ({len(events)}):")
+        for e in events[:10]:
+            q = e.get("question", e.get("marketId", "?"))
+            pos = e.get("position", "?")
+            amt = e.get("amountIn")
+            amt_str = f" ${amt:,.2f}" if amt else ""
+            lines.append(f"  {q[:60]} | {pos}{amt_str}")
+    return "\n".join(lines)
+
+
+@mcp.tool()
+async def mt_prediction_leaderboard(
+    limit: int = 20,
+    ctx: Context[ServerSession, MolTrustClient] | None = None,
+) -> str:
+    """Get the prediction market leaderboard — top wallets by prediction score.
+
+    Returns wallets ranked by their composite prediction score,
+    which factors in win rate, ROI, volume, sample size, and recency.
+
+    Args:
+        limit: Number of entries to return (default 20, max 100)
+    """
+    client = _client(ctx)
+    resp = await client.http.get(
+        f"{GUARD_PREFIX}/prediction/leaderboard",
+        params={"limit": str(min(limit, 100))},
+    )
+    if resp.status_code != 200:
+        return f"Error {resp.status_code}: {resp.text}"
+    data = resp.json()
+    entries = data.get("entries", [])
+    if not entries:
+        return "No entries in the prediction leaderboard yet."
+    lines = [f"Prediction Leaderboard (top {len(entries)}):", ""]
+    for e in entries:
+        rank = e.get("rank", "?")
+        addr = e.get("address", "?")
+        short = addr[:6] + "..." + addr[-4:] if len(addr) > 12 else addr
+        score = e.get("predictionScore", 0)
+        wins = e.get("wins", 0)
+        losses = e.get("losses", 0)
+        vol = e.get("totalVolume", 0)
+        pnl = e.get("netPnl", 0)
+        did = e.get("did")
+        did_str = f" ({did})" if did else ""
+        lines.append(
+            f"#{rank} {short}{did_str}  "
+            f"Score:{score}  {wins}W/{losses}L  "
+            f"Vol:${vol:,.0f}  P&L:${pnl:+,.0f}"
+        )
     return "\n".join(lines)
 
 
