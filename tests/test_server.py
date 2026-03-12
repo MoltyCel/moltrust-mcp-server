@@ -1030,3 +1030,111 @@ class TestMtPrediction:
             ctx=ctx,
         )
         assert "Error 500" in result
+
+
+class TestMtSalesguard:
+    @pytest.mark.asyncio
+    async def test_salesguard_verify_success(self, mock_client):
+        mock_client.http.get = AsyncMock(return_value=make_response(200, {
+            "product_id": "AIRMAX-90-WHITE-43",
+            "verified": True,
+            "risk_level": "LOW",
+            "brand": {"name": "TestBrand", "did": "did:web:api.moltrust.ch:brands:abc", "domain": "testbrand.com"},
+            "credential_hash": "sha256:abc123",
+            "base_anchor": "0xdef456",
+            "registered_at": "2026-03-12T00:00:00Z",
+        }))
+        ctx = make_ctx(mock_client)
+        result = await mcp._tool_manager._tools["mt_salesguard_verify"].fn(
+            product_id="AIRMAX-90-WHITE-43",
+            ctx=ctx,
+        )
+        assert "Verified: True" in result
+        assert "TestBrand" in result
+        assert "LOW" in result
+        assert "sha256:abc123" in result
+
+    @pytest.mark.asyncio
+    async def test_salesguard_verify_not_found(self, mock_client):
+        mock_client.http.get = AsyncMock(return_value=make_response(200, {
+            "product_id": "UNKNOWN-999",
+            "verified": False,
+            "risk_level": "HIGH",
+            "message": "No provenance record found. This product may be counterfeit.",
+        }))
+        ctx = make_ctx(mock_client)
+        result = await mcp._tool_manager._tools["mt_salesguard_verify"].fn(
+            product_id="UNKNOWN-999",
+            ctx=ctx,
+        )
+        assert "Verified: False" in result
+        assert "HIGH" in result
+        assert "counterfeit" in result
+
+    @pytest.mark.asyncio
+    async def test_salesguard_reseller_success(self, mock_client):
+        mock_client.http.get = AsyncMock(return_value=make_response(200, {
+            "reseller_did": "did:web:sneakerstore.com",
+            "authorized": True,
+            "brand": {"name": "TestBrand", "did": "did:web:api.moltrust.ch:brands:abc"},
+            "reseller_name": "SneakerStore EU",
+            "authorized_skus": ["AIRMAX-90-WHITE-43"],
+            "expires_at": "2027-01-01T00:00:00Z",
+            "expired": False,
+        }))
+        ctx = make_ctx(mock_client)
+        result = await mcp._tool_manager._tools["mt_salesguard_reseller"].fn(
+            reseller_did="did:web:sneakerstore.com",
+            ctx=ctx,
+        )
+        assert "Authorized: True" in result
+        assert "TestBrand" in result
+        assert "AIRMAX-90-WHITE-43" in result
+
+    @pytest.mark.asyncio
+    async def test_salesguard_reseller_not_found(self, mock_client):
+        mock_client.http.get = AsyncMock(return_value=make_response(200, {
+            "reseller_did": "did:web:unknown.com",
+            "authorized": False,
+            "message": "No authorization record found for this reseller.",
+        }))
+        ctx = make_ctx(mock_client)
+        result = await mcp._tool_manager._tools["mt_salesguard_reseller"].fn(
+            reseller_did="did:web:unknown.com",
+            ctx=ctx,
+        )
+        assert "Authorized: False" in result
+        assert "No authorization record" in result
+
+    @pytest.mark.asyncio
+    async def test_salesguard_register_success(self, mock_client):
+        mock_client.http.post = AsyncMock(return_value=make_response(201, {
+            "did": "did:web:api.moltrust.ch:brands:new-uuid",
+            "api_key": "sg_abc123def456",
+            "name": "NewBrand",
+            "domain": "newbrand.com",
+            "created_at": "2026-03-12T00:00:00Z",
+        }))
+        ctx = make_ctx(mock_client)
+        result = await mcp._tool_manager._tools["mt_salesguard_register"].fn(
+            name="NewBrand",
+            domain="newbrand.com",
+            ctx=ctx,
+        )
+        assert "Brand Registered" in result
+        assert "did:web:api.moltrust.ch:brands:new-uuid" in result
+        assert "sg_abc123def456" in result
+
+    @pytest.mark.asyncio
+    async def test_salesguard_register_error(self, mock_client):
+        mock_client.http.post = AsyncMock(return_value=make_response(400, {
+            "error": "missing_field",
+            "message": "name is required",
+        }))
+        ctx = make_ctx(mock_client)
+        result = await mcp._tool_manager._tools["mt_salesguard_register"].fn(
+            name="",
+            domain="test.com",
+            ctx=ctx,
+        )
+        assert "Bad request" in result
