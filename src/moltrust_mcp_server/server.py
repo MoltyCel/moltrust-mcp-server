@@ -13,7 +13,7 @@ from mcp.server.session import ServerSession
 API_URL_DEFAULT = "https://api.moltrust.ch"
 GUARD_PREFIX = "/guard"
 TIMEOUT = 30.0
-VERSION = "0.6.0"
+VERSION = "0.7.0"
 
 
 @dataclass
@@ -1487,6 +1487,136 @@ async def mt_prediction_leaderboard(
             f"Score:{score}  {wins}W/{losses}L  "
             f"Vol:${vol:,.0f}  P&L:${pnl:+,.0f}"
         )
+    return "\n".join(lines)
+
+
+# ---------------------------------------------------------------------------
+# MT Salesguard — Brand Product Provenance
+# ---------------------------------------------------------------------------
+
+
+@mcp.tool()
+async def mt_salesguard_verify(
+    product_id: str,
+    ctx: Context[ServerSession, MolTrustClient],
+) -> str:
+    """Verify product provenance via MT Salesguard.
+
+    Checks whether a product ID has a valid ProductProvenanceCredential
+    issued by an authorized brand. Returns brand info, credential hash,
+    Base anchor, and risk level.
+
+    Args:
+        product_id: Product identifier (e.g. "AIRMAX-90-WHITE-43")
+    """
+    client = _client(ctx)
+    resp = await client.http.get(
+        f"{GUARD_PREFIX}/salesguard/verify/{product_id}",
+    )
+    if resp.status_code != 200:
+        return f"Error {resp.status_code}: {resp.text}"
+    data = resp.json()
+    lines = [
+        f"Product: {data.get('product_id', product_id)}",
+        f"Verified: {data.get('verified', False)}",
+        f"Risk Level: {data.get('risk_level', 'UNKNOWN')}",
+    ]
+    if data.get("verified"):
+        brand = data.get("brand", {})
+        lines.append(f"Brand: {brand.get('name', '?')}")
+        lines.append(f"Brand DID: {brand.get('did', '?')}")
+        lines.append(f"Domain: {brand.get('domain', '?')}")
+        lines.append(f"Credential Hash: {data.get('credential_hash', '?')}")
+        lines.append(f"Base Anchor: {data.get('base_anchor', '?')}")
+        lines.append(f"Registered: {data.get('registered_at', '?')}")
+    else:
+        lines.append(data.get("message", "No provenance record found."))
+    return "\n".join(lines)
+
+
+@mcp.tool()
+async def mt_salesguard_reseller(
+    reseller_did: str,
+    ctx: Context[ServerSession, MolTrustClient],
+) -> str:
+    """Verify reseller authorization via MT Salesguard.
+
+    Checks whether a reseller DID has been authorized by a brand
+    to sell specific products. Returns authorization status, brand info,
+    authorized SKUs, and expiry.
+
+    Args:
+        reseller_did: Reseller DID (e.g. "did:web:sneakerstore.com")
+    """
+    client = _client(ctx)
+    resp = await client.http.get(
+        f"{GUARD_PREFIX}/salesguard/reseller/verify/{reseller_did}",
+    )
+    if resp.status_code != 200:
+        return f"Error {resp.status_code}: {resp.text}"
+    data = resp.json()
+    lines = [
+        f"Reseller: {data.get('reseller_did', reseller_did)}",
+        f"Authorized: {data.get('authorized', False)}",
+    ]
+    if data.get("authorized"):
+        brand = data.get("brand", {})
+        lines.append(f"Brand: {brand.get('name', '?')}")
+        lines.append(f"Brand DID: {brand.get('did', '?')}")
+        lines.append(f"Reseller Name: {data.get('reseller_name', '?')}")
+        skus = data.get("authorized_skus", [])
+        lines.append(f"Authorized SKUs: {', '.join(skus) if skus else 'none'}")
+        lines.append(f"Expires: {data.get('expires_at', '?')}")
+        lines.append(f"Expired: {data.get('expired', False)}")
+    else:
+        lines.append(data.get("message", "No authorization record found."))
+    return "\n".join(lines)
+
+
+@mcp.tool()
+async def mt_salesguard_register(
+    name: str,
+    domain: str,
+    contact_email: str = "",
+    ctx: Context[ServerSession, MolTrustClient] | None = None,
+) -> str:
+    """Register a brand with MT Salesguard.
+
+    Creates a new brand identity with a DID and API key.
+    The API key is used to authenticate product registration
+    and reseller authorization requests.
+
+    Args:
+        name: Brand name (e.g. "Nike", "Adidas")
+        domain: Brand domain (e.g. "nike.com")
+        contact_email: Contact email for the brand (optional)
+    """
+    assert ctx is not None
+    client = _client(ctx)
+    body: dict = {"name": name, "domain": domain}
+    if contact_email:
+        body["contact_email"] = contact_email
+    resp = await client.http.post(
+        f"{GUARD_PREFIX}/salesguard/brand/register",
+        json=body,
+    )
+    if resp.status_code == 400:
+        return f"Bad request: {resp.json().get('message', resp.text)}"
+    if resp.status_code not in (200, 201):
+        return f"Error {resp.status_code}: {resp.text}"
+    data = resp.json()
+    lines = [
+        "Brand Registered Successfully",
+        "",
+        f"DID: {data.get('did', '?')}",
+        f"API Key: {data.get('api_key', '?')}",
+        f"Name: {data.get('name', '?')}",
+        f"Domain: {data.get('domain', '?')}",
+        f"Created: {data.get('created_at', '?')}",
+        "",
+        "Use the API key with Authorization: Bearer <api_key>",
+        "to register products and authorize resellers.",
+    ]
     return "\n".join(lines)
 
 
