@@ -9,6 +9,10 @@ MCP server for [MolTrust](https://moltrust.ch) — Trust Infrastructure for AI A
 
 30 tools across 6 verticals: identity, on-chain trust scoring, prediction market track records, prediction market integrity, autonomous commerce, and agent skill verification — all through the [Model Context Protocol](https://modelcontextprotocol.io).
 
+<a href="https://glama.ai/mcp/servers/@MoltyCel/mol-trust">
+  <img width="380" height="200" src="https://glama.ai/mcp/servers/@MoltyCel/mol-trust/badge" alt="MolTrust MCP server" />
+</a>
+
 ## Tools
 
 ### Identity & Credentials (11 tools)
