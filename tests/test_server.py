@@ -1138,3 +1138,168 @@ class TestMtSalesguard:
             ctx=ctx,
         )
         assert "Bad request" in result
+
+
+class TestMtFantasy:
+    """Tests for MT Fantasy Sports tools."""
+
+    @pytest.mark.asyncio
+    async def test_fantasy_commit_success(self, mock_client):
+        mock_client.http.post = AsyncMock(return_value=make_response(201, {
+            "commitment_hash": "e6a4b34d31a30cd993bf87a3543530cfd030e012b71e7f1fa979e7c74311f0a0",
+            "timestamp_iso": "2026-03-16T13:36:39Z",
+            "tx_hash": "0xabc123",
+            "chain": "base",
+            "agent_did": "did:moltrust:a1b2c3d4e5f67890",
+            "contest_id": "dk-nfl-sun-main-2026w14",
+            "lineup_hash": "62249ad0d59e341283467c750b48937a297ea7d2a52c2b87bbc9920b18a3f8e9",
+            "status": "committed",
+            "verify_url": "https://api.moltrust.ch/sports/fantasy/lineups/verify/e6a4b34d",
+            "credential": {
+                "type": ["VerifiableCredential", "FantasyLineupCredential"],
+                "issuer": "did:web:api.moltrust.ch",
+                "credentialSubject": {
+                    "id": "did:moltrust:a1b2c3d4e5f67890",
+                    "lineupHash": "62249ad0",
+                    "commitmentHash": "e6a4b34d",
+                },
+            },
+        }))
+        ctx = make_ctx(mock_client)
+        result = await mcp._tool_manager._tools["mt_fantasy_commit"].fn(
+            agent_did="did:moltrust:a1b2c3d4e5f67890",
+            contest_id="dk-nfl-sun-main-2026w14",
+            platform="draftkings",
+            sport="nfl",
+            contest_start_iso="2026-11-29T13:00:00Z",
+            lineup_json='{"QB": "Mahomes", "RB1": "Henry"}',
+            ctx=ctx,
+        )
+        assert "Fantasy Lineup Committed" in result
+        assert "e6a4b34d" in result
+        assert "FantasyLineupCredential" in result
+        assert "did:web:api.moltrust.ch" in result
+
+    @pytest.mark.asyncio
+    async def test_fantasy_commit_error(self, mock_client):
+        mock_client.http.post = AsyncMock(return_value=make_response(400, {
+            "detail": "Invalid DID format",
+        }))
+        ctx = make_ctx(mock_client)
+        result = await mcp._tool_manager._tools["mt_fantasy_commit"].fn(
+            agent_did="bad-did",
+            contest_id="test",
+            platform="draftkings",
+            sport="nfl",
+            contest_start_iso="2026-11-29T13:00:00Z",
+            lineup_json='{"QB": "Mahomes"}',
+            ctx=ctx,
+        )
+        assert "Error 400" in result
+
+    @pytest.mark.asyncio
+    async def test_fantasy_commit_invalid_json(self, mock_client):
+        ctx = make_ctx(mock_client)
+        result = await mcp._tool_manager._tools["mt_fantasy_commit"].fn(
+            agent_did="did:moltrust:a1b2c3d4e5f67890",
+            contest_id="test",
+            platform="draftkings",
+            sport="nfl",
+            contest_start_iso="2026-11-29T13:00:00Z",
+            lineup_json="not valid json",
+            ctx=ctx,
+        )
+        assert "Error" in result
+        assert "JSON" in result
+
+    @pytest.mark.asyncio
+    async def test_fantasy_verify_success(self, mock_client):
+        mock_client.http.get = AsyncMock(return_value=make_response(200, {
+            "commitment_hash": "e6a4b34d31a30cd993bf87a3543530cfd030e012b71e7f1fa979e7c74311f0a0",
+            "agent_did": "did:moltrust:a1b2c3d4e5f67890",
+            "contest_id": "dk-nfl-sun-main-2026w14",
+            "platform": "draftkings",
+            "sport": "nfl",
+            "minutes_before_contest": 165,
+            "committed_at": "2026-11-22T10:15:00Z",
+            "lineup": {"QB": "Mahomes", "RB1": "Henry"},
+            "projected_score": 178.5,
+            "confidence": 0.68,
+            "on_chain": {"verified": True, "tx_hash": "0xabc", "chain": "base"},
+            "result": {"settled": False, "actual_score": None, "rank": None,
+                       "total_entries": None, "prize_usd": None, "percentile": None},
+            "credential": {
+                "type": ["VerifiableCredential", "FantasyLineupCredential"],
+                "issuer": "did:web:api.moltrust.ch",
+            },
+        }))
+        ctx = make_ctx(mock_client)
+        result = await mcp._tool_manager._tools["mt_fantasy_verify"].fn(
+            commitment_hash="e6a4b34d31a30cd993bf87a3543530cfd030e012b71e7f1fa979e7c74311f0a0",
+            ctx=ctx,
+        )
+        assert "e6a4b34d" in result
+        assert "165" in result
+        assert "Mahomes" in result
+        assert "FantasyLineupCredential" in result
+        assert "On-Chain Verified: True" in result
+
+    @pytest.mark.asyncio
+    async def test_fantasy_verify_not_found(self, mock_client):
+        mock_client.http.get = AsyncMock(return_value=make_response(404, {
+            "detail": "not found",
+        }))
+        ctx = make_ctx(mock_client)
+        result = await mcp._tool_manager._tools["mt_fantasy_verify"].fn(
+            commitment_hash="0000000000000000000000000000000000000000000000000000000000000000",
+            ctx=ctx,
+        )
+        assert "not found" in result
+
+    @pytest.mark.asyncio
+    async def test_fantasy_history_success(self, mock_client):
+        mock_client.http.get = AsyncMock(return_value=make_response(200, {
+            "agent_did": "did:moltrust:a1b2c3d4e5f67890",
+            "fantasy_stats": {
+                "total_lineups": 25,
+                "settled": 20,
+                "itm_rate": 0.42,
+                "roi": 0.18,
+                "projection_accuracy": 0.91,
+                "avg_projected_score": 175.0,
+                "avg_actual_score": 180.5,
+                "platforms": ["draftkings", "fanduel"],
+                "sports": ["nfl", "nba"],
+            },
+            "lineups": [
+                {
+                    "commitment_hash": "e6a4b34d31a30cd993bf87a3543530cfd030e012b71e7f1fa979e7c74311f0a0",
+                    "contest_id": "dk-nfl-sun-main-2026w14",
+                    "platform": "draftkings",
+                    "sport": "nfl",
+                    "settled_at": "2026-11-29T20:00:00Z",
+                },
+            ],
+        }))
+        ctx = make_ctx(mock_client)
+        result = await mcp._tool_manager._tools["mt_fantasy_history"].fn(
+            did="did:moltrust:a1b2c3d4e5f67890",
+            ctx=ctx,
+        )
+        assert "25" in result
+        assert "42.0%" in result
+        assert "18.0%" in result
+        assert "draftkings" in result
+        assert "Settled" in result
+
+    @pytest.mark.asyncio
+    async def test_fantasy_history_not_found(self, mock_client):
+        mock_client.http.get = AsyncMock(return_value=make_response(404, {
+            "detail": "not found",
+        }))
+        ctx = make_ctx(mock_client)
+        result = await mcp._tool_manager._tools["mt_fantasy_history"].fn(
+            did="did:moltrust:0000000000000000",
+            ctx=ctx,
+        )
+        assert "not found" in result or "no fantasy history" in result
