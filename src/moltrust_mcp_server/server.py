@@ -13,7 +13,7 @@ from mcp.server.session import ServerSession
 API_URL_DEFAULT = "https://api.moltrust.ch"
 GUARD_PREFIX = "/guard"
 TIMEOUT = 30.0
-VERSION = "0.7.0"
+VERSION = "0.8.0"
 
 
 @dataclass
@@ -1617,6 +1617,204 @@ async def mt_salesguard_register(
         "Use the API key with Authorization: Bearer <api_key>",
         "to register products and authorize resellers.",
     ]
+    return "\n".join(lines)
+
+
+# ---------------------------------------------------------------------------
+# MT Fantasy Sports
+# ---------------------------------------------------------------------------
+
+
+@mcp.tool()
+async def mt_fantasy_commit(
+    agent_did: str,
+    contest_id: str,
+    platform: str,
+    sport: str,
+    contest_start_iso: str,
+    lineup_json: str,
+    projected_score: float = 0.0,
+    confidence: float = 0.0,
+    entry_fee_usd: float = 0.0,
+    contest_type: str = "classic",
+    ctx: Context[ServerSession, MolTrustClient] | None = None,
+) -> str:
+    """Commit a fantasy lineup with a SHA-256 hash anchored on Base L2.
+
+    Creates a FantasyLineupCredential (W3C VC) proving the lineup was
+    locked before contest start. The commitment hash is tamper-proof.
+
+    Args:
+        agent_did: Agent DID (e.g. "did:moltrust:a1b2c3d4e5f67890")
+        contest_id: Unique contest identifier (e.g. "dk-nfl-sun-main-2026w12")
+        platform: Platform name: draftkings, fanduel, yahoo, sleeper, custom
+        sport: Sport type: nfl, nba, mlb, nhl, pga, nascar, soccer, custom
+        contest_start_iso: Contest start time in ISO 8601 (must be in the future)
+        lineup_json: JSON string of lineup object (e.g. '{"QB":"Mahomes","RB1":"Henry"}')
+        projected_score: Agent's projected score for this lineup
+        confidence: Confidence level 0.0 to 1.0
+        entry_fee_usd: Contest entry fee in USD
+        contest_type: Contest type (e.g. "classic", "showdown")
+    """
+    assert ctx is not None
+    client = _client(ctx)
+    try:
+        lineup = json.loads(lineup_json)
+    except (json.JSONDecodeError, TypeError):
+        return "Error: lineup_json must be a valid JSON string"
+    body: dict = {
+        "agent_did": agent_did,
+        "contest_id": contest_id,
+        "platform": platform,
+        "sport": sport,
+        "contest_start_iso": contest_start_iso,
+        "lineup": lineup,
+    }
+    if projected_score:
+        body["projected_score"] = projected_score
+    if confidence:
+        body["confidence"] = confidence
+    if entry_fee_usd:
+        body["entry_fee_usd"] = entry_fee_usd
+    if contest_type:
+        body["contest_type"] = contest_type
+    resp = await client.http.post(
+        "/sports/fantasy/lineups/commit",
+        json=body,
+        headers=_auth_headers(client),
+    )
+    if resp.status_code == 409:
+        return f"Duplicate: Lineup already committed for this contest."
+    if resp.status_code not in (200, 201):
+        return f"Error {resp.status_code}: {resp.text}"
+    data = resp.json()
+    cred = data.get("credential", {})
+    lines = [
+        "Fantasy Lineup Committed",
+        "",
+        f"Commitment Hash: {data.get('commitment_hash', '?')}",
+        f"Lineup Hash: {data.get('lineup_hash', '?')}",
+        f"Agent: {data.get('agent_did', '?')}",
+        f"Contest: {data.get('contest_id', '?')}",
+        f"Chain: {data.get('chain', 'base')}",
+        f"Tx Hash: {data.get('tx_hash', '?')}",
+        f"Status: {data.get('status', '?')}",
+        f"Verify URL: {data.get('verify_url', '?')}",
+        "",
+        f"Credential Type: {', '.join(cred.get('type', []))}",
+        f"Issuer: {cred.get('issuer', '?')}",
+    ]
+    return "\n".join(lines)
+
+
+@mcp.tool()
+async def mt_fantasy_verify(
+    commitment_hash: str,
+    ctx: Context[ServerSession, MolTrustClient] | None = None,
+) -> str:
+    """Verify a fantasy lineup commitment. Public endpoint, no auth required.
+
+    Returns the full lineup, timing proof (minutes before contest),
+    on-chain verification status, and the FantasyLineupCredential.
+
+    Args:
+        commitment_hash: The 64-char SHA-256 commitment hash
+    """
+    assert ctx is not None
+    client = _client(ctx)
+    resp = await client.http.get(
+        f"/sports/fantasy/lineups/verify/{commitment_hash}",
+    )
+    if resp.status_code == 404:
+        return "Lineup commitment not found."
+    if resp.status_code != 200:
+        return f"Error {resp.status_code}: {resp.text}"
+    data = resp.json()
+    on_chain = data.get("on_chain", {})
+    result = data.get("result", {})
+    cred = data.get("credential", {})
+    lines = [
+        f"Commitment Hash: {data.get('commitment_hash', '?')}",
+        f"Agent: {data.get('agent_did', '?')}",
+        f"Contest: {data.get('contest_id', '?')}",
+        f"Platform: {data.get('platform', '?')}",
+        f"Sport: {data.get('sport', '?')}",
+        f"Minutes Before Contest: {data.get('minutes_before_contest', '?')}",
+        f"Committed At: {data.get('committed_at', '?')}",
+        "",
+        f"Lineup: {json.dumps(data.get('lineup', {}), indent=2)}",
+        f"Projected Score: {data.get('projected_score', '?')}",
+        f"Confidence: {data.get('confidence', '?')}",
+        "",
+        f"On-Chain Verified: {on_chain.get('verified', False)}",
+        f"Tx Hash: {on_chain.get('tx_hash', '?')}",
+        f"Chain: {on_chain.get('chain', 'base')}",
+    ]
+    if result.get("settled"):
+        lines.extend([
+            "",
+            f"Actual Score: {result.get('actual_score', '?')}",
+            f"Rank: {result.get('rank', '?')}",
+            f"Prize: ${result.get('prize_usd', 0):.2f}",
+        ])
+    if cred:
+        cred_type = cred.get("type", [])
+        lines.extend([
+            "",
+            f"Credential: {', '.join(cred_type) if isinstance(cred_type, list) else cred_type}",
+            f"Issuer: {cred.get('issuer', '?')}",
+        ])
+    return "\n".join(lines)
+
+
+@mcp.tool()
+async def mt_fantasy_history(
+    did: str,
+    ctx: Context[ServerSession, MolTrustClient] | None = None,
+) -> str:
+    """Get fantasy lineup history and stats for an agent.
+
+    Returns ITM rate, ROI, projection accuracy, and recent lineups
+    for the specified agent DID.
+
+    Args:
+        did: Agent DID (e.g. "did:moltrust:a1b2c3d4e5f67890")
+    """
+    assert ctx is not None
+    client = _client(ctx)
+    resp = await client.http.get(
+        f"/sports/fantasy/history/{did}",
+        headers=_auth_headers(client),
+    )
+    if resp.status_code == 404:
+        return f"Agent {did} not found or has no fantasy history."
+    if resp.status_code != 200:
+        return f"Error {resp.status_code}: {resp.text}"
+    data = resp.json()
+    stats = data.get("fantasy_stats", {})
+    lineups = data.get("lineups", [])
+    lines = [
+        f"Fantasy Stats for {data.get('agent_did', did)}",
+        "",
+        f"Total Lineups: {stats.get('total_lineups', 0)}",
+        f"Settled: {stats.get('settled', 0)}",
+        f"ITM Rate: {stats.get('itm_rate', 0):.1%}",
+        f"ROI: {stats.get('roi', 0):.1%}",
+        f"Projection Accuracy: {stats.get('projection_accuracy', 'N/A')}",
+        f"Avg Projected: {stats.get('avg_projected_score', '?')}",
+        f"Avg Actual: {stats.get('avg_actual_score', '?')}",
+        f"Platforms: {', '.join(stats.get('platforms', []))}",
+        f"Sports: {', '.join(stats.get('sports', []))}",
+    ]
+    if lineups:
+        lines.append("")
+        lines.append(f"Recent Lineups ({len(lineups)}):")
+        for lu in lineups[:5]:
+            settled = "Settled" if lu.get("settled_at") else "Pending"
+            lines.append(
+                f"  - {lu.get('contest_id', '?')} ({lu.get('platform', '?')}/{lu.get('sport', '?')}) "
+                f"[{settled}] hash={lu.get('commitment_hash', '?')[:12]}..."
+            )
     return "\n".join(lines)
 
 
