@@ -1303,3 +1303,133 @@ class TestMtFantasy:
             ctx=ctx,
         )
         assert "not found" in result or "no fantasy history" in result
+
+
+class TestMtSwarm:
+    @pytest.mark.asyncio
+    async def test_interaction_proof_success(self, mock_client):
+        mock_client.http.post = AsyncMock(return_value=make_response(200, {
+            "evidence_hash": "sha256:abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890",
+            "base_tx_hash": "0x1234abcd5678ef90",
+            "anchored_at": "2026-03-17T20:00:00Z",
+            "valid_for_endorsement_until": "2026-03-20T20:00:00Z",
+            "agent_did": "did:moltrust:455d06aa3d9d4fac",
+        }))
+        ctx = make_ctx(mock_client)
+        result = await mcp._tool_manager._tools["mt_create_interaction_proof"].fn(
+            api_key="mt_test_key",
+            agent_a="did:moltrust:455d06aa3d9d4fac",
+            agent_b="did:moltrust:d34ed796a4dc4698",
+            ctx=ctx,
+        )
+        assert "Interaction Proof Created" in result
+        assert "sha256:" in result
+        assert "0x1234" in result
+        assert "mt_endorse_agent" in result
+        mock_client.http.post.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_interaction_proof_error(self, mock_client):
+        mock_client.http.post = AsyncMock(return_value=make_response(400, {
+            "detail": "agent_a and agent_b must be different",
+        }))
+        ctx = make_ctx(mock_client)
+        result = await mcp._tool_manager._tools["mt_create_interaction_proof"].fn(
+            api_key="mt_test_key",
+            agent_a="did:moltrust:same",
+            agent_b="did:moltrust:same",
+            ctx=ctx,
+        )
+        assert "Error 400" in result
+
+    @pytest.mark.asyncio
+    async def test_endorse_agent_success(self, mock_client):
+        mock_client.http.post = AsyncMock(return_value=make_response(200, {
+            "id": "urn:uuid:12345",
+            "type": ["VerifiableCredential", "SkillEndorsementCredential"],
+            "issuer": "did:moltrust:455d06aa3d9d4fac",
+            "issuanceDate": "2026-03-17T20:00:00Z",
+            "expirationDate": "2026-06-15T20:00:00Z",
+            "credentialSubject": {
+                "id": "did:moltrust:d34ed796a4dc4698",
+                "skill": "python",
+                "evidenceHash": "sha256:abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890",
+                "vertical": "skill",
+            },
+            "proof": {
+                "type": "Ed25519Signature2020",
+                "proofValue": "sandbox_unsigned",
+            },
+        }))
+        ctx = make_ctx(mock_client)
+        result = await mcp._tool_manager._tools["mt_endorse_agent"].fn(
+            endorser_api_key="mt_test_key",
+            endorsed_did="did:moltrust:d34ed796a4dc4698",
+            skill="python",
+            evidence_hash="sha256:abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890",
+            evidence_timestamp="2026-03-17T20:00:00Z",
+            vertical="skill",
+            ctx=ctx,
+        )
+        assert "SkillEndorsementCredential Issued" in result
+        assert "python" in result
+        assert "did:moltrust:d34ed796a4dc4698" in result
+        assert "Ed25519" in result
+        mock_client.http.post.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_endorse_agent_self_endorsement(self, mock_client):
+        mock_client.http.post = AsyncMock(return_value=make_response(400, {
+            "detail": "Self-endorsement is not allowed",
+        }))
+        ctx = make_ctx(mock_client)
+        result = await mcp._tool_manager._tools["mt_endorse_agent"].fn(
+            endorser_api_key="mt_test_key",
+            endorsed_did="did:moltrust:same",
+            skill="python",
+            evidence_hash="sha256:" + "a" * 64,
+            evidence_timestamp="2026-03-17T20:00:00Z",
+            vertical="skill",
+            ctx=ctx,
+        )
+        assert "Error 400" in result
+
+    @pytest.mark.asyncio
+    async def test_trust_score_withheld(self, mock_client):
+        mock_client.http.get = AsyncMock(return_value=make_response(200, {
+            "did": "did:test:nobody",
+            "trust_score": None,
+            "withheld": True,
+            "endorser_count": 1,
+            "sybil_penalty": 0.0,
+            "computed_at": "2026-03-17T20:00:00Z",
+            "cache_valid_until": "2026-03-17T21:00:00Z",
+        }))
+        ctx = make_ctx(mock_client)
+        result = await mcp._tool_manager._tools["mt_get_trust_score"].fn(
+            did="did:test:nobody",
+            ctx=ctx,
+        )
+        assert "WITHHELD" in result
+        assert "fewer than 3" in result
+        mock_client.http.get.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_trust_score_visible(self, mock_client):
+        mock_client.http.get = AsyncMock(return_value=make_response(200, {
+            "did": "did:moltrust:scored_agent",
+            "trust_score": 0.7532,
+            "withheld": False,
+            "endorser_count": 5,
+            "sybil_penalty": 0.0,
+            "computed_at": "2026-03-17T20:00:00Z",
+            "cache_valid_until": "2026-03-17T21:00:00Z",
+        }))
+        ctx = make_ctx(mock_client)
+        result = await mcp._tool_manager._tools["mt_get_trust_score"].fn(
+            did="did:moltrust:scored_agent",
+            ctx=ctx,
+        )
+        assert "0.7532" in result
+        assert "5" in result
+        assert "WITHHELD" not in result

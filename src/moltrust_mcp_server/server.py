@@ -13,7 +13,7 @@ from mcp.server.session import ServerSession
 API_URL_DEFAULT = "https://api.moltrust.ch"
 GUARD_PREFIX = "/guard"
 TIMEOUT = 30.0
-VERSION = "0.8.0"
+VERSION = "0.9.0"
 
 
 @dataclass
@@ -1815,6 +1815,165 @@ async def mt_fantasy_history(
                 f"  - {lu.get('contest_id', '?')} ({lu.get('platform', '?')}/{lu.get('sport', '?')}) "
                 f"[{settled}] hash={lu.get('commitment_hash', '?')[:12]}..."
             )
+    return "\n".join(lines)
+
+
+# ---------------------------------------------------------------------------
+# Swarm Intelligence — Trust Score & Endorsements
+# ---------------------------------------------------------------------------
+
+
+@mcp.tool()
+async def mt_create_interaction_proof(
+    api_key: str,
+    agent_a: str,
+    agent_b: str,
+    interaction_type: str = "skill_verification",
+    outcome: str = "success",
+    ctx: Context[ServerSession, MolTrustClient] | None = None,
+) -> str:
+    """Create an interaction proof before issuing a SkillEndorsementCredential.
+
+    Returns evidence_hash and base_tx_hash anchored on Base L2.
+    Required before calling mt_endorse_agent. Valid for 72 hours.
+
+    Args:
+        api_key: MolTrust API key of the agent creating the proof
+        agent_a: DID of the first agent in the interaction
+        agent_b: DID of the second agent in the interaction
+        interaction_type: Type of interaction (e.g. skill_verification, purchase, prediction)
+        outcome: Outcome of the interaction: success or failure
+    """
+    assert ctx is not None
+    client = _client(ctx)
+    from datetime import datetime, timezone
+
+    payload = {
+        "type": interaction_type,
+        "agent_a": agent_a,
+        "agent_b": agent_b,
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "outcome": outcome,
+    }
+    resp = await client.http.post(
+        "/skill/interaction-proof",
+        json={"api_key": api_key, "interaction_payload": payload},
+    )
+    if resp.status_code != 200:
+        return f"Error {resp.status_code}: {resp.text}"
+    data = resp.json()
+    lines = [
+        "Interaction Proof Created",
+        "",
+        f"Evidence Hash: {data.get('evidence_hash', '?')}",
+        f"Base Tx Hash: {data.get('base_tx_hash', '?')}",
+        f"Anchored At: {data.get('anchored_at', '?')}",
+        f"Valid Until: {data.get('valid_for_endorsement_until', '?')}",
+        f"Agent DID: {data.get('agent_did', '?')}",
+        "",
+        "Use evidence_hash and anchored_at with mt_endorse_agent.",
+    ]
+    return "\n".join(lines)
+
+
+@mcp.tool()
+async def mt_endorse_agent(
+    endorser_api_key: str,
+    endorsed_did: str,
+    skill: str,
+    evidence_hash: str,
+    evidence_timestamp: str,
+    vertical: str,
+    ctx: Context[ServerSession, MolTrustClient] | None = None,
+) -> str:
+    """Issue a W3C SkillEndorsementCredential for another agent.
+
+    Requires a valid evidence_hash from mt_create_interaction_proof
+    (max 72h old). Self-endorsement is rejected.
+    Contributes to the endorsed agent's Trust Score.
+
+    Args:
+        endorser_api_key: MolTrust API key of the endorsing agent
+        endorsed_did: DID of the agent to endorse
+        skill: Skill being endorsed (python, javascript, security, prediction, trading, data_analysis, api_integration, smart_contracts, nlp, computer_vision, general)
+        evidence_hash: SHA-256 hash from mt_create_interaction_proof (sha256:...)
+        evidence_timestamp: ISO 8601 timestamp from mt_create_interaction_proof
+        vertical: MolTrust vertical (skill, shopping, travel, prediction, salesguard, sports, core)
+    """
+    assert ctx is not None
+    client = _client(ctx)
+    resp = await client.http.post(
+        "/skill/endorse",
+        json={
+            "api_key": endorser_api_key,
+            "endorsed_did": endorsed_did,
+            "skill": skill,
+            "evidence_hash": evidence_hash,
+            "evidence_timestamp": evidence_timestamp,
+            "vertical": vertical,
+        },
+    )
+    if resp.status_code != 200:
+        return f"Error {resp.status_code}: {resp.text}"
+    vc = resp.json()
+    subj = vc.get("credentialSubject", {})
+    proof = vc.get("proof", {})
+    lines = [
+        "SkillEndorsementCredential Issued",
+        "",
+        f"VC ID: {vc.get('id', '?')}",
+        f"Type: {', '.join(vc.get('type', []))}",
+        f"Issuer: {vc.get('issuer', '?')}",
+        f"Endorsed: {subj.get('id', '?')}",
+        f"Skill: {subj.get('skill', '?')}",
+        f"Vertical: {subj.get('vertical', '?')}",
+        f"Evidence: {subj.get('evidenceHash', '?')}",
+        f"Issued: {vc.get('issuanceDate', '?')}",
+        f"Expires: {vc.get('expirationDate', '?')}",
+        f"Proof: {proof.get('type', '?')}",
+    ]
+    return "\n".join(lines)
+
+
+@mcp.tool()
+async def mt_get_trust_score(
+    did: str,
+    ctx: Context[ServerSession, MolTrustClient] | None = None,
+) -> str:
+    """Get the Swarm Intelligence Trust Score for an agent.
+
+    Score is computed on-demand from all valid SkillEndorsementCredentials.
+    Returns null/withheld if fewer than 3 independent endorsers.
+    Includes sybil_penalty when collusion is detected.
+
+    Args:
+        did: DID of the agent to score (e.g. "did:moltrust:a1b2c3d4e5f67890")
+    """
+    assert ctx is not None
+    client = _client(ctx)
+    resp = await client.http.get(f"/skill/trust-score/{did}")
+    if resp.status_code != 200:
+        return f"Error {resp.status_code}: {resp.text}"
+    data = resp.json()
+    score = data.get("trust_score")
+    if data.get("withheld"):
+        lines = [
+            f"Trust Score for {data.get('did', did)}",
+            "",
+            "Score: WITHHELD (fewer than 3 independent endorsers)",
+            f"Current Endorsers: {data.get('endorser_count', 0)}",
+            "Need at least 3 endorsers from different verticals.",
+        ]
+    else:
+        lines = [
+            f"Trust Score for {data.get('did', did)}",
+            "",
+            f"Score: {score:.4f}" if score else "Score: N/A",
+            f"Endorser Count: {data.get('endorser_count', 0)}",
+            f"Sybil Penalty: {data.get('sybil_penalty', 0.0)}",
+            f"Computed At: {data.get('computed_at', '?')}",
+            f"Cache Valid Until: {data.get('cache_valid_until', '?')}",
+        ]
     return "\n".join(lines)
 
 
