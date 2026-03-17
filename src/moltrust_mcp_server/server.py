@@ -1684,7 +1684,7 @@ async def mt_fantasy_commit(
         headers=_auth_headers(client),
     )
     if resp.status_code == 409:
-        return f"Duplicate: Lineup already committed for this contest."
+        return "Duplicate: Lineup already committed for this contest."
     if resp.status_code not in (200, 201):
         return f"Error {resp.status_code}: {resp.text}"
     data = resp.json()
