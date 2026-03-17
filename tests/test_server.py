@@ -3,7 +3,7 @@
 import json
 import pytest
 import httpx
-from unittest.mock import AsyncMock, patch, MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
 from moltrust_mcp_server.server import (
     mcp,
