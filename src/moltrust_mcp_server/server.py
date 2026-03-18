@@ -1751,19 +1751,23 @@ async def mt_fantasy_verify(
         f"Chain: {on_chain.get('chain', 'base')}",
     ]
     if result.get("settled"):
-        lines.extend([
-            "",
-            f"Actual Score: {result.get('actual_score', '?')}",
-            f"Rank: {result.get('rank', '?')}",
-            f"Prize: ${result.get('prize_usd', 0):.2f}",
-        ])
+        lines.extend(
+            [
+                "",
+                f"Actual Score: {result.get('actual_score', '?')}",
+                f"Rank: {result.get('rank', '?')}",
+                f"Prize: ${result.get('prize_usd', 0):.2f}",
+            ]
+        )
     if cred:
         cred_type = cred.get("type", [])
-        lines.extend([
-            "",
-            f"Credential: {', '.join(cred_type) if isinstance(cred_type, list) else cred_type}",
-            f"Issuer: {cred.get('issuer', '?')}",
-        ])
+        lines.extend(
+            [
+                "",
+                f"Credential: {', '.join(cred_type) if isinstance(cred_type, list) else cred_type}",
+                f"Issuer: {cred.get('issuer', '?')}",
+            ]
+        )
     return "\n".join(lines)
 
 
