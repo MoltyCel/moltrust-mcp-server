@@ -13,7 +13,7 @@ from mcp.server.session import ServerSession
 API_URL_DEFAULT = "https://api.moltrust.ch"
 GUARD_PREFIX = "/guard"
 TIMEOUT = 30.0
-VERSION = "0.9.0"
+VERSION = "1.0.0"
 
 
 @dataclass
@@ -1944,11 +1944,12 @@ async def mt_get_trust_score(
     did: str,
     ctx: Context[ServerSession, MolTrustClient] | None = None,
 ) -> str:
-    """Get the Swarm Intelligence Trust Score for an agent.
+    """Get the Swarm Intelligence Trust Score for an agent (Phase 2).
 
-    Score is computed on-demand from all valid SkillEndorsementCredentials.
-    Returns null/withheld if fewer than 3 independent endorsers.
-    Includes sybil_penalty when collusion is detected.
+    Score combines direct endorsements, propagated trust from endorsers,
+    cross-vertical credential bonus, and interaction proof activity.
+    Returns null/withheld if fewer than 3 independent endorsers (non-seed).
+    Seed agents get their base score directly.
 
     Args:
         did: DID of the agent to score (e.g. "did:moltrust:a1b2c3d4e5f67890")
@@ -1960,6 +1961,7 @@ async def mt_get_trust_score(
         return f"Error {resp.status_code}: {resp.text}"
     data = resp.json()
     score = data.get("trust_score")
+    breakdown = data.get("breakdown", {})
     if data.get("withheld"):
         lines = [
             f"Trust Score for {data.get('did', did)}",
@@ -1969,16 +1971,140 @@ async def mt_get_trust_score(
             "Need at least 3 endorsers from different verticals.",
         ]
     else:
+        grade = data.get("grade", "N/A")
         lines = [
             f"Trust Score for {data.get('did', did)}",
             "",
-            f"Score: {score:.4f}" if score else "Score: N/A",
+            f"Score: {score}" if score is not None else "Score: N/A",
+            f"Grade: {grade}",
             f"Endorser Count: {data.get('endorser_count', 0)}",
-            f"Sybil Penalty: {data.get('sybil_penalty', 0.0)}",
+            f"Method: {breakdown.get('computation_method', '?')}",
+            "",
+            "Breakdown:",
+            f"  Direct Score: {breakdown.get('direct_score', 0)}",
+            f"  Propagated Score: {breakdown.get('propagated_score', 0)}",
+            f"  Cross-Vertical Bonus: {breakdown.get('cross_vertical_bonus', 0)}",
+            f"  Interaction Bonus: {breakdown.get('interaction_bonus', 0)}",
+            f"  Sybil Penalty: {breakdown.get('sybil_penalty', 0)}",
+            "",
             f"Computed At: {data.get('computed_at', '?')}",
             f"Cache Valid Until: {data.get('cache_valid_until', '?')}",
         ]
     return "\n".join(lines)
+
+
+@mcp.tool()
+async def mt_get_swarm_graph(
+    did: str,
+    ctx: Context[ServerSession, MolTrustClient] | None = None,
+) -> str:
+    """Get the trust propagation graph for an agent (2 hops).
+
+    Returns nodes (agents with scores) and edges (endorsements) showing
+    who endorses this agent and who endorses them.
+
+    Args:
+        did: DID of the agent to get graph for
+    """
+    assert ctx is not None
+    client = _client(ctx)
+    resp = await client.http.get(f"/swarm/graph/{did}")
+    if resp.status_code != 200:
+        return f"Error {resp.status_code}: {resp.text}"
+    data = resp.json()
+    lines = [
+        f"Trust Propagation Graph for {did}",
+        f"Nodes: {data.get('node_count', 0)} | Edges: {data.get('edge_count', 0)}",
+        "",
+    ]
+    for node in data.get("nodes", []):
+        label = f" ({node['label']})" if node.get("label") else ""
+        score_str = f"{node['score']}" if node.get("score") is not None else "N/A"
+        lines.append(
+            f"  [Hop {node.get('hop', '?')}] {node['did']}{label} — "
+            f"Score: {score_str} ({node.get('grade', 'N/A')})"
+        )
+    if data.get("edges"):
+        lines.append("")
+        lines.append("Edges:")
+        for edge in data["edges"]:
+            lines.append(
+                f"  {edge['from']} → {edge['to']} ({edge.get('vertical', '?')})"
+            )
+    return "\n".join(lines)
+
+
+@mcp.tool()
+async def mt_get_swarm_stats(
+    ctx: Context[ServerSession, MolTrustClient] | None = None,
+) -> str:
+    """Get global Swarm Intelligence statistics.
+
+    Returns total agents, endorsements, seed agents, average trust score,
+    propagation depth, and top trusted agents.
+    """
+    assert ctx is not None
+    client = _client(ctx)
+    resp = await client.http.get("/swarm/stats")
+    if resp.status_code != 200:
+        return f"Error {resp.status_code}: {resp.text}"
+    data = resp.json()
+    lines = [
+        "Swarm Intelligence Statistics",
+        "",
+        f"Total Agents: {data.get('total_agents', 0)}",
+        f"Total Endorsements: {data.get('total_endorsements', 0)}",
+        f"Avg Trust Score: {data.get('avg_trust_score', 'N/A')}",
+        f"Max Propagation Depth: {data.get('propagation_depth', 0)}",
+        "",
+        "Seed Agents:",
+    ]
+    for s in data.get("seed_agents", []):
+        lines.append(f"  {s['did']} ({s.get('label', '?')}) — base: {s['base_score']}")
+    top = data.get("top_trusted", [])
+    if top:
+        lines.append("")
+        lines.append("Top Trusted:")
+        for t in top:
+            lines.append(f"  {t['did']} — {t['score']}")
+    return "\n".join(lines)
+
+
+@mcp.tool()
+async def mt_register_seed(
+    did: str,
+    label: str,
+    base_score: float = 80.0,
+    admin_key: str = "",
+    ctx: Context[ServerSession, MolTrustClient] | None = None,
+) -> str:
+    """Register a trusted seed agent in the Swarm Intelligence network (admin only).
+
+    Seed agents bootstrap the trust network with a base score.
+    Requires the ADMIN_KEY for authorization.
+
+    Args:
+        did: DID of the agent to register as seed
+        label: Human-readable label for the seed agent
+        base_score: Base trust score (0-100, default 80)
+        admin_key: Admin key for authorization
+    """
+    assert ctx is not None
+    client = _client(ctx)
+    resp = await client.http.post(
+        "/swarm/seed",
+        json={"did": did, "label": label, "base_score": base_score},
+        headers={"x-admin-key": admin_key},
+    )
+    if resp.status_code != 200:
+        return f"Error {resp.status_code}: {resp.text}"
+    data = resp.json()
+    return (
+        f"Seed Agent Registered\n\n"
+        f"DID: {data.get('did')}\n"
+        f"Label: {data.get('label')}\n"
+        f"Base Score: {data.get('base_score')}"
+    )
 
 
 # ---------------------------------------------------------------------------
