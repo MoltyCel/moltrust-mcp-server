@@ -2108,6 +2108,120 @@ async def mt_register_seed(
 
 
 # ---------------------------------------------------------------------------
+# Verified Badge Tools
+# ---------------------------------------------------------------------------
+
+
+@mcp.tool()
+async def mt_get_badge(
+    did: str,
+    ctx: Context[ServerSession, MolTrustClient] | None = None,
+) -> str:
+    """Get the Verified by MolTrust badge status for an agent.
+
+    Returns badge tier, trust score, grade, issue/expiry dates,
+    and embeddable SVG URL.
+
+    Args:
+        did: The DID of the agent to check
+    """
+    assert ctx is not None
+    client = _client(ctx)
+    resp = await client.http.get(f"/identity/badge/{did}")
+    if resp.status_code != 200:
+        return f"Error: {resp.status_code} — {resp.text[:200]}"
+    data = resp.json()
+    if not data.get("verified"):
+        return (
+            f"Badge Status: Not Verified\n\n"
+            f"DID: {data.get('did')}\n"
+            f"Trust Score: {data.get('trust_score', 'N/A')}\n"
+            f"Grade: {data.get('grade', 'N/A')}\n\n"
+            f"Badge URL: {data.get('badge_url')}\n"
+            f"Verify: {data.get('verify_url')}"
+        )
+    return (
+        f"Badge Status: {data.get('tier', '').capitalize()} ✓\n\n"
+        f"DID: {data.get('did')}\n"
+        f"Tier: {data.get('tier')}\n"
+        f"Trust Score: {data.get('trust_score')}\n"
+        f"Grade: {data.get('grade')}\n"
+        f"Issued: {data.get('issued_at')}\n"
+        f"Expires: {data.get('expires_at')}\n"
+        f"VC Hash: {data.get('vc_hash')}\n\n"
+        f"Badge SVG: {data.get('badge_url')}\n"
+        f"Verify: {data.get('verify_url')}\n\n"
+        f"Embed: [![Verified by MolTrust]({data.get('badge_url')})]({data.get('verify_url')})"
+    )
+
+
+@mcp.tool()
+async def mt_issue_badge(
+    did: str,
+    tier: str = "verified",
+    ctx: Context[ServerSession, MolTrustClient] | None = None,
+) -> str:
+    """Issue a Verified by MolTrust badge for an agent.
+
+    Tiers: 'verified' (score 40+, $5), 'trusted' (score 60+, $20).
+    Badge is valid for 1 year and auto-revokes if trust score drops.
+
+    Args:
+        did: The DID of the agent to issue a badge for
+        tier: Badge tier — 'verified' or 'trusted'
+    """
+    assert ctx is not None
+    client = _client(ctx)
+    resp = await client.http.post(
+        "/identity/badge/issue",
+        json={"did": did, "tier": tier},
+    )
+    if resp.status_code != 200:
+        return f"Error: {resp.status_code} — {resp.text[:200]}"
+    data = resp.json()
+    return (
+        f"Badge Issued Successfully\n\n"
+        f"DID: {data.get('did')}\n"
+        f"Tier: {data.get('tier')}\n"
+        f"Trust Score: {data.get('trust_score')}\n"
+        f"Issued: {data.get('issued_at')}\n"
+        f"Expires: {data.get('expires_at')}\n"
+        f"VC Hash: {data.get('vc_hash')}\n\n"
+        f"Badge SVG: {data.get('badge_url')}\n"
+        f"Verify: {data.get('verify_url')}\n\n"
+        f"Embed in README:\n"
+        f"[![Verified by MolTrust]({data.get('badge_url')})]({data.get('verify_url')})"
+    )
+
+
+@mcp.tool()
+async def mt_check_badge(
+    did: str,
+    ctx: Context[ServerSession, MolTrustClient] | None = None,
+) -> str:
+    """Quick check: is this agent badge-verified by MolTrust?
+
+    Returns a simple yes/no with tier and expiry info.
+
+    Args:
+        did: The DID of the agent to check
+    """
+    assert ctx is not None
+    client = _client(ctx)
+    resp = await client.http.get(f"/identity/badge/check/{did}")
+    if resp.status_code != 200:
+        return f"Error: {resp.status_code} — {resp.text[:200]}"
+    data = resp.json()
+    if data.get("verified"):
+        return (
+            f"Verified: YES\n"
+            f"Tier: {data.get('tier')}\n"
+            f"Expires in: {data.get('expires_in_days')} days"
+        )
+    return "Verified: NO"
+
+
+# ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
