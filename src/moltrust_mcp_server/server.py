@@ -2222,6 +2222,163 @@ async def mt_check_badge(
 
 
 # ---------------------------------------------------------------------------
+# MT Music — AI-Generated Music Provenance
+# ---------------------------------------------------------------------------
+
+
+@mcp.tool()
+async def mt_issue_music_credential(
+    agent_did: str,
+    tool: str,
+    human_oversight: str,
+    rights: str,
+    track_title: str,
+    track_description: str = "",
+    genre: str = "",
+    isrc: str = "",
+    ctx: Context[ServerSession, MolTrustClient] = None,
+) -> str:
+    """Issue a VerifiedMusicCredential for an AI-generated music track.
+
+    Creates a W3C Verifiable Credential proving the provenance of an
+    AI-generated music track — which tool created it, whether a human
+    was involved, and what rights apply. Anchored on Base L2.
+    EU AI Act Article 50(2) compliant.
+
+    Args:
+        agent_did: DID of the agent/creator (e.g. "did:moltrust:abc123")
+        tool: AI tool used (e.g. "Suno API v3.2", "Udio", "Magenta")
+        human_oversight: "true", "false", or "partial"
+        rights: Rights declaration (e.g. "CC-BY", "All Rights Reserved", "Agent-Wallet")
+        track_title: Title of the track
+        track_description: Optional description
+        genre: Optional genre (e.g. "ambient", "jazz", "classical")
+        isrc: Optional ISRC code (ISO 3901)
+    """
+    client = _client(ctx)
+    body = {
+        "agent_did": agent_did,
+        "tool": tool,
+        "human_oversight": human_oversight,
+        "rights": rights,
+        "track_title": track_title,
+        "track_description": track_description or None,
+        "genre": genre or None,
+        "isrc": isrc or None,
+    }
+    resp = await client.http.post("/music/credential/issue", json=body)
+    if resp.status_code != 200:
+        return f"Error {resp.status_code}: {resp.text}"
+    data = resp.json()
+    prov = data.get("credentialSubject", {}).get("provenance", {})
+    anchor = data.get("anchor", {})
+    return (
+        f"Credential ID: {data.get('id')}\n"
+        f"Track: {track_title}\n"
+        f"Tool: {tool}\n"
+        f"Human Oversight: {human_oversight}\n"
+        f"Rights: {rights}\n"
+        f"Track Hash: {prov.get('trackHash')}\n"
+        f"EU AI Act: {prov.get('euAiActCompliance')}\n"
+        f"Issued: {data.get('issuanceDate')}\n"
+        f"Anchor TX: {anchor.get('anchorTx', 'pending')}\n"
+        f"Anchor Block: {anchor.get('anchorBlock', 'pending')}"
+    )
+
+
+@mcp.tool()
+async def mt_verify_music_credential(
+    credential_id: str,
+    ctx: Context[ServerSession, MolTrustClient] = None,
+) -> str:
+    """Verify a VerifiedMusicCredential by its ID.
+
+    Checks whether a music credential is valid (not revoked),
+    returns provenance summary including tool, human oversight,
+    rights, and on-chain anchor status.
+
+    Args:
+        credential_id: UUID of the music credential
+    """
+    client = _client(ctx)
+    resp = await client.http.get(f"/music/verify/{credential_id}")
+    if resp.status_code != 200:
+        return f"Error {resp.status_code}: {resp.text}"
+    data = resp.json()
+    cred = data.get("credential", {})
+    subj = cred.get("credentialSubject", {})
+    track = subj.get("track", {})
+    anchor = cred.get("anchor", {})
+    lines = [
+        f"Valid: {data.get('valid')}",
+        f"Revoked: {data.get('revoked')}",
+    ]
+    if data.get("revoked"):
+        lines.append(f"Revocation Reason: {data.get('revocationReason')}")
+    lines.extend([
+        f"Track: {track.get('title')}",
+        f"Tool: {track.get('tool')}",
+        f"Human Oversight: {track.get('humanOversight')}",
+        f"Rights: {track.get('rights')}",
+        f"Genre: {track.get('genre')}",
+        f"Issued: {cred.get('issuanceDate')}",
+        f"Anchored: {data.get('anchored')}",
+        f"Anchor TX: {anchor.get('anchorTx', 'N/A')}",
+    ])
+    return "\n".join(lines)
+
+
+@mcp.tool()
+async def mt_get_track_provenance(
+    credential_id: str,
+    ctx: Context[ServerSession, MolTrustClient] = None,
+) -> str:
+    """Get full provenance details for a music credential.
+
+    Returns the complete VerifiedMusicCredential including track
+    metadata, provenance hash, EU AI Act compliance status,
+    and on-chain anchor information.
+
+    Args:
+        credential_id: UUID of the music credential
+    """
+    client = _client(ctx)
+    resp = await client.http.get(f"/music/credential/{credential_id}")
+    if resp.status_code != 200:
+        return f"Error {resp.status_code}: {resp.text}"
+    data = resp.json()
+    subj = data.get("credentialSubject", {})
+    track = subj.get("track", {})
+    prov = subj.get("provenance", {})
+    anchor = data.get("anchor", {})
+    lines = [
+        f"=== Track Provenance ===",
+        f"Credential ID: {data.get('id')}",
+        f"Agent DID: {subj.get('agentDid')}",
+        f"Human Name: {subj.get('humanName', 'N/A')}",
+        f"",
+        f"Track: {track.get('title')}",
+        f"Description: {track.get('description', 'N/A')}",
+        f"Tool: {track.get('tool')}",
+        f"Human Oversight: {track.get('humanOversight')}",
+        f"Genre: {track.get('genre', 'N/A')}",
+        f"Rights: {track.get('rights')}",
+        f"ISRC: {track.get('isrc', 'N/A')}",
+        f"Session: {track.get('session', 'N/A')}",
+        f"",
+        f"Track Hash: {prov.get('trackHash')}",
+        f"EU AI Act: {prov.get('euAiActCompliance')}",
+        f"Issued: {prov.get('issuanceDate')}",
+        f"",
+        f"Chain: {anchor.get('chain')}",
+        f"Anchor TX: {anchor.get('anchorTx', 'pending')}",
+        f"Anchor Block: {anchor.get('anchorBlock', 'pending')}",
+        f"Calldata: {anchor.get('calldata')}",
+    ]
+    return "\n".join(lines)
+
+
+# ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
