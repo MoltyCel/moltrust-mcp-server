@@ -2316,16 +2316,18 @@ async def mt_verify_music_credential(
     ]
     if data.get("revoked"):
         lines.append(f"Revocation Reason: {data.get('revocationReason')}")
-    lines.extend([
-        f"Track: {track.get('title')}",
-        f"Tool: {track.get('tool')}",
-        f"Human Oversight: {track.get('humanOversight')}",
-        f"Rights: {track.get('rights')}",
-        f"Genre: {track.get('genre')}",
-        f"Issued: {cred.get('issuanceDate')}",
-        f"Anchored: {data.get('anchored')}",
-        f"Anchor TX: {anchor.get('anchorTx', 'N/A')}",
-    ])
+    lines.extend(
+        [
+            f"Track: {track.get('title')}",
+            f"Tool: {track.get('tool')}",
+            f"Human Oversight: {track.get('humanOversight')}",
+            f"Rights: {track.get('rights')}",
+            f"Genre: {track.get('genre')}",
+            f"Issued: {cred.get('issuanceDate')}",
+            f"Anchored: {data.get('anchored')}",
+            f"Anchor TX: {anchor.get('anchorTx', 'N/A')}",
+        ]
+    )
     return "\n".join(lines)
 
 
