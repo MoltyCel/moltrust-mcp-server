@@ -72,7 +72,7 @@ def _fmt(data: dict) -> str:
 async def moltrust_register(
     display_name: str,
     platform: str,
-    ctx: Context[ServerSession, MolTrustClient],
+    ctx: Context[ServerSession, MolTrustClient] | None = None,
 ) -> str:
     """Register a new AI agent on MolTrust.
 
@@ -128,7 +128,7 @@ async def moltrust_register(
 @mcp.tool()
 async def moltrust_verify(
     did: str,
-    ctx: Context[ServerSession, MolTrustClient],
+    ctx: Context[ServerSession, MolTrustClient] | None = None,
 ) -> str:
     """Verify an AI agent by its DID.
 
@@ -183,7 +183,7 @@ async def moltrust_verify(
 @mcp.tool()
 async def moltrust_reputation(
     did: str,
-    ctx: Context[ServerSession, MolTrustClient],
+    ctx: Context[ServerSession, MolTrustClient] | None = None,
 ) -> str:
     """Get the reputation score for an AI agent.
 
@@ -216,7 +216,7 @@ async def moltrust_rate(
     from_did: str,
     to_did: str,
     score: int,
-    ctx: Context[ServerSession, MolTrustClient],
+    ctx: Context[ServerSession, MolTrustClient] | None = None,
 ) -> str:
     """Rate another AI agent (1-5 stars).
 
@@ -487,7 +487,7 @@ async def moltrust_credits(
 
 @mcp.tool()
 async def moltrust_deposit_info(
-    ctx: Context[ServerSession, MolTrustClient],
+    ctx: Context[ServerSession, MolTrustClient] | None = None,
 ) -> str:
     """Get USDC deposit instructions to buy MolTrust credits.
 
@@ -523,7 +523,7 @@ async def moltrust_deposit_info(
 async def moltrust_claim_deposit(
     tx_hash: str,
     did: str,
-    ctx: Context[ServerSession, MolTrustClient],
+    ctx: Context[ServerSession, MolTrustClient] | None = None,
 ) -> str:
     """Claim MolTrust credits from a USDC deposit on Base.
 
@@ -576,7 +576,7 @@ async def moltrust_claim_deposit(
 
 @mcp.tool()
 async def moltrust_stats(
-    ctx: Context[ServerSession, MolTrustClient],
+    ctx: Context[ServerSession, MolTrustClient] | None = None,
 ) -> str:
     """Get MolTrust network statistics.
 
@@ -601,7 +601,7 @@ async def moltrust_stats(
 @mcp.tool()
 async def moltrust_deposit_history(
     did: str,
-    ctx: Context[ServerSession, MolTrustClient],
+    ctx: Context[ServerSession, MolTrustClient] | None = None,
 ) -> str:
     """Get USDC deposit history for an agent.
 
@@ -755,7 +755,7 @@ async def moltrust_erc8004(
 @mcp.tool()
 async def moltguard_score(
     address: str,
-    ctx: Context[ServerSession, MolTrustClient],
+    ctx: Context[ServerSession, MolTrustClient] | None = None,
 ) -> str:
     """Get an agent trust score for a Base wallet address.
 
@@ -785,7 +785,7 @@ async def moltguard_score(
 @mcp.tool()
 async def moltguard_detail(
     address: str,
-    ctx: Context[ServerSession, MolTrustClient],
+    ctx: Context[ServerSession, MolTrustClient] | None = None,
 ) -> str:
     """Get a detailed agent trust report for a Base wallet address.
 
@@ -805,7 +805,7 @@ async def moltguard_detail(
 @mcp.tool()
 async def moltguard_sybil(
     address: str,
-    ctx: Context[ServerSession, MolTrustClient],
+    ctx: Context[ServerSession, MolTrustClient] | None = None,
 ) -> str:
     """Scan a Base wallet for Sybil indicators.
 
@@ -847,7 +847,7 @@ async def moltguard_sybil(
 @mcp.tool()
 async def moltguard_market(
     market_id: str,
-    ctx: Context[ServerSession, MolTrustClient],
+    ctx: Context[ServerSession, MolTrustClient] | None = None,
 ) -> str:
     """Check a Polymarket prediction market for integrity anomalies.
 
@@ -877,7 +877,7 @@ async def moltguard_market(
 
 @mcp.tool()
 async def moltguard_feed(
-    ctx: Context[ServerSession, MolTrustClient],
+    ctx: Context[ServerSession, MolTrustClient] | None = None,
 ) -> str:
     """Get the top anomaly feed — markets with highest integrity concerns.
 
@@ -902,7 +902,7 @@ async def moltguard_feed(
 @mcp.tool()
 async def moltguard_credential_issue(
     address: str,
-    ctx: Context[ServerSession, MolTrustClient],
+    ctx: Context[ServerSession, MolTrustClient] | None = None,
 ) -> str:
     """Issue a W3C Verifiable Credential (AgentTrustCredential) for a wallet.
 
@@ -926,7 +926,7 @@ async def moltguard_credential_issue(
 @mcp.tool()
 async def moltguard_credential_verify(
     jws: str,
-    ctx: Context[ServerSession, MolTrustClient],
+    ctx: Context[ServerSession, MolTrustClient] | None = None,
 ) -> str:
     """Verify a MoltGuard Verifiable Credential JWS signature.
 
@@ -955,7 +955,7 @@ async def moltguard_credential_verify(
 
 @mcp.tool()
 async def mt_shopping_info(
-    ctx: Context[ServerSession, MolTrustClient],
+    ctx: Context[ServerSession, MolTrustClient] | None = None,
 ) -> str:
     """Get MT Shopping API information.
 
@@ -976,7 +976,7 @@ async def mt_shopping_verify(
     transaction_currency: str,
     merchant_id: str,
     item_description: str,
-    ctx: Context[ServerSession, MolTrustClient],
+    ctx: Context[ServerSession, MolTrustClient] | None = None,
 ) -> str:
     """Verify a shopping transaction against a BuyerAgentCredential.
 
@@ -1077,7 +1077,7 @@ async def mt_shopping_issue_vc(
 
 @mcp.tool()
 async def mt_travel_info(
-    ctx: Context[ServerSession, MolTrustClient],
+    ctx: Context[ServerSession, MolTrustClient] | None = None,
 ) -> str:
     """Get MT Travel service information and available endpoints.
 
@@ -1099,7 +1099,7 @@ async def mt_travel_verify(
     segment: str,
     amount: float,
     currency: str,
-    ctx: Context[ServerSession, MolTrustClient],
+    ctx: Context[ServerSession, MolTrustClient] | None = None,
 ) -> str:
     """Verify a travel booking against a TravelAgentCredential.
 
@@ -1217,7 +1217,7 @@ async def mt_travel_issue_vc(
 @mcp.tool()
 async def mt_skill_audit(
     github_url: str,
-    ctx: Context[ServerSession, MolTrustClient],
+    ctx: Context[ServerSession, MolTrustClient] | None = None,
 ) -> str:
     """Audit an AI agent skill (SKILL.md) for security risks.
 
@@ -1261,7 +1261,7 @@ async def mt_skill_audit(
 @mcp.tool()
 async def mt_skill_verify(
     skill_hash: str,
-    ctx: Context[ServerSession, MolTrustClient],
+    ctx: Context[ServerSession, MolTrustClient] | None = None,
 ) -> str:
     """Verify an AI agent skill by its canonical SHA-256 hash.
 
@@ -1295,7 +1295,7 @@ async def mt_skill_verify(
 async def mt_skill_issue_vc(
     author_did: str,
     repository_url: str,
-    ctx: Context[ServerSession, MolTrustClient],
+    ctx: Context[ServerSession, MolTrustClient] | None = None,
 ) -> str:
     """Issue a VerifiedSkillCredential for an AI agent skill.
 
@@ -1392,7 +1392,7 @@ async def mt_prediction_link(
 @mcp.tool()
 async def mt_prediction_wallet(
     address: str,
-    ctx: Context[ServerSession, MolTrustClient],
+    ctx: Context[ServerSession, MolTrustClient] | None = None,
 ) -> str:
     """Get prediction market profile and track record for a wallet.
 
@@ -1498,7 +1498,7 @@ async def mt_prediction_leaderboard(
 @mcp.tool()
 async def mt_salesguard_verify(
     product_id: str,
-    ctx: Context[ServerSession, MolTrustClient],
+    ctx: Context[ServerSession, MolTrustClient] | None = None,
 ) -> str:
     """Verify product provenance via MT Salesguard.
 
@@ -1537,7 +1537,7 @@ async def mt_salesguard_verify(
 @mcp.tool()
 async def mt_salesguard_reseller(
     reseller_did: str,
-    ctx: Context[ServerSession, MolTrustClient],
+    ctx: Context[ServerSession, MolTrustClient] | None = None,
 ) -> str:
     """Verify reseller authorization via MT Salesguard.
 
@@ -2255,6 +2255,7 @@ async def mt_issue_music_credential(
         genre: Optional genre (e.g. "ambient", "jazz", "classical")
         isrc: Optional ISRC code (ISO 3901)
     """
+    assert ctx is not None
     client = _client(ctx)
     body = {
         "agent_did": agent_did,
@@ -2300,6 +2301,7 @@ async def mt_verify_music_credential(
     Args:
         credential_id: UUID of the music credential
     """
+    assert ctx is not None
     client = _client(ctx)
     resp = await client.http.get(f"/music/verify/{credential_id}")
     if resp.status_code != 200:
@@ -2342,6 +2344,7 @@ async def mt_get_track_provenance(
     Args:
         credential_id: UUID of the music credential
     """
+    assert ctx is not None
     client = _client(ctx)
     resp = await client.http.get(f"/music/credential/{credential_id}")
     if resp.status_code != 200:
