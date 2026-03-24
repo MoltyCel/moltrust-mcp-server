@@ -2236,7 +2236,7 @@ async def mt_issue_music_credential(
     track_description: str = "",
     genre: str = "",
     isrc: str = "",
-    ctx: Context[ServerSession, MolTrustClient] = None,
+    ctx: Context[ServerSession, MolTrustClient] | None = None,
 ) -> str:
     """Issue a VerifiedMusicCredential for an AI-generated music track.
 
@@ -2289,7 +2289,7 @@ async def mt_issue_music_credential(
 @mcp.tool()
 async def mt_verify_music_credential(
     credential_id: str,
-    ctx: Context[ServerSession, MolTrustClient] = None,
+    ctx: Context[ServerSession, MolTrustClient] | None = None,
 ) -> str:
     """Verify a VerifiedMusicCredential by its ID.
 
@@ -2331,7 +2331,7 @@ async def mt_verify_music_credential(
 @mcp.tool()
 async def mt_get_track_provenance(
     credential_id: str,
-    ctx: Context[ServerSession, MolTrustClient] = None,
+    ctx: Context[ServerSession, MolTrustClient] | None = None,
 ) -> str:
     """Get full provenance details for a music credential.
 
@@ -2352,7 +2352,7 @@ async def mt_get_track_provenance(
     prov = subj.get("provenance", {})
     anchor = data.get("anchor", {})
     lines = [
-        f"=== Track Provenance ===",
+        "=== Track Provenance ===",
         f"Credential ID: {data.get('id')}",
         f"Agent DID: {subj.get('agentDid')}",
         f"Human Name: {subj.get('humanName', 'N/A')}",
