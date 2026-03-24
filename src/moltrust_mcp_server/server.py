@@ -51,7 +51,8 @@ mcp = FastMCP(
 )
 
 
-def _client(ctx: Context[ServerSession, MolTrustClient]) -> MolTrustClient:
+def _client(ctx: Context[ServerSession, MolTrustClient] | None) -> MolTrustClient:
+    assert ctx is not None, "MCP context required"
     return ctx.request_context.lifespan_context
 
 
@@ -2255,7 +2256,6 @@ async def mt_issue_music_credential(
         genre: Optional genre (e.g. "ambient", "jazz", "classical")
         isrc: Optional ISRC code (ISO 3901)
     """
-    assert ctx is not None
     client = _client(ctx)
     body = {
         "agent_did": agent_did,
@@ -2301,7 +2301,6 @@ async def mt_verify_music_credential(
     Args:
         credential_id: UUID of the music credential
     """
-    assert ctx is not None
     client = _client(ctx)
     resp = await client.http.get(f"/music/verify/{credential_id}")
     if resp.status_code != 200:
@@ -2344,7 +2343,6 @@ async def mt_get_track_provenance(
     Args:
         credential_id: UUID of the music credential
     """
-    assert ctx is not None
     client = _client(ctx)
     resp = await client.http.get(f"/music/credential/{credential_id}")
     if resp.status_code != 200:
