@@ -163,6 +163,10 @@ Then run:
 MOLTRUST_API_KEY=your_api_key moltrust-mcp-server
 ```
 
+## Hosted deployment
+
+A hosted deployment is available on [Fronteir AI](https://fronteir.ai/mcp/moltycel-moltrust-mcp-server).
+
 ## Configuration
 
 | Environment Variable | Default | Description |
