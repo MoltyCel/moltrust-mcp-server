@@ -73,7 +73,7 @@ MCP server for [MolTrust](https://moltrust.ch) — Trust Infrastructure for AI A
 
 ## Setup
 
-Get an API key at [api.moltrust.ch/auth/signup](https://api.moltrust.ch/auth/signup) or use the test key `***REMOVED***`.
+Get an API key at [api.moltrust.ch/auth/signup](https://api.moltrust.ch/auth/signup).
 
 ### Claude Code
 
