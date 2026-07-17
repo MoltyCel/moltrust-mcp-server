@@ -18,14 +18,16 @@ VERSION = "1.0.0"
 
 @dataclass
 class MolTrustClient:
+    # Shared across ALL concurrent requests (lifespan singleton). Holds ONLY the
+    # stateless httpx connection pool — never an api_key. The key is resolved
+    # per-request (see _session_api_key); storing it here would race across
+    # concurrent callers → sign/act with the wrong caller's key (impersonation).
     http: httpx.AsyncClient
-    api_key: str
     api_url: str
 
 
 @asynccontextmanager
 async def lifespan(server: FastMCP) -> AsyncIterator[MolTrustClient]:
-    api_key = os.environ.get("MOLTRUST_API_KEY", "")
     api_url = os.environ.get("MOLTRUST_API_URL", API_URL_DEFAULT).rstrip("/")
 
     async with httpx.AsyncClient(
@@ -33,7 +35,7 @@ async def lifespan(server: FastMCP) -> AsyncIterator[MolTrustClient]:
         timeout=TIMEOUT,
         headers={"User-Agent": f"moltrust-mcp-server/{VERSION}"},
     ) as http:
-        yield MolTrustClient(http=http, api_key=api_key, api_url=api_url)
+        yield MolTrustClient(http=http, api_url=api_url)
 
 
 mcp = FastMCP(
@@ -56,8 +58,40 @@ def _client(ctx: Context[ServerSession, MolTrustClient] | None) -> MolTrustClien
     return ctx.request_context.lifespan_context
 
 
-def _auth_headers(client: MolTrustClient) -> dict[str, str]:
-    return {"X-API-Key": client.api_key}
+def _session_api_key(ctx) -> "str | None":
+    """The api_key for THIS request only — request-scoped, never stored on the
+    shared client (that would race across concurrent requests → impersonation).
+
+    HTTP transport: read from the per-request Starlette request the SDK exposes
+    via a contextvar (query param `api_key`, or an X-API-Key / Bearer header).
+    stdio transport: no request object, so fall back to the process env
+    (Smithery stdio sets MOLTRUST_API_KEY once per spawned session). On HTTP with
+    no key we return None and NEVER fall back to env — that would hand out a
+    server-wide key or bleed another caller's context.
+    """
+    req = getattr(ctx.request_context, "request", None) if ctx else None
+    if req is None:
+        return os.environ.get("MOLTRUST_API_KEY") or None
+    key = req.query_params.get("api_key") or req.headers.get("x-api-key")
+    if not key:
+        auth = req.headers.get("authorization", "")
+        if auth[:7].lower() == "bearer ":
+            key = auth[7:].strip()
+    return key or None
+
+
+def _no_key_message() -> str:
+    return (
+        "No MolTrust API key in this request. Add your api_key to the MCP server "
+        "config (Smithery: the 'moltrustApiKey' field; or send it as ?api_key=… / "
+        "an X-API-Key header). Need a key? Register at https://api.moltrust.ch."
+    )
+
+
+def _auth_headers(ctx) -> dict[str, str]:
+    """Per-request auth header — resolves the key from the request-scoped context
+    on every call, so there is no shared mutable key to race on."""
+    return {"X-API-Key": _session_api_key(ctx) or ""}
 
 
 def _fmt(data: dict) -> str:
@@ -85,13 +119,13 @@ async def moltrust_register(
         platform: Platform identifier (e.g. "openai", "langchain", "custom")
     """
     client = _client(ctx)
-    if not client.api_key:
-        return "Error: MOLTRUST_API_KEY environment variable is not set."
+    if not _session_api_key(ctx):
+        return _no_key_message()
 
     resp = await client.http.post(
         "/identity/register",
         json={"display_name": display_name, "platform": platform},
-        headers=_auth_headers(client),
+        headers=_auth_headers(ctx),
     )
 
     if resp.status_code == 409:
@@ -229,8 +263,8 @@ async def moltrust_rate(
         score: Rating from 1 (untrusted) to 5 (highly trusted)
     """
     client = _client(ctx)
-    if not client.api_key:
-        return "Error: MOLTRUST_API_KEY environment variable is not set."
+    if not _session_api_key(ctx):
+        return _no_key_message()
 
     if score < 1 or score > 5:
         return "Error: Score must be between 1 and 5."
@@ -238,7 +272,7 @@ async def moltrust_rate(
     resp = await client.http.post(
         "/reputation/rate",
         json={"from_did": from_did, "to_did": to_did, "score": score},
-        headers=_auth_headers(client),
+        headers=_auth_headers(ctx),
     )
 
     if resp.status_code == 400:
@@ -275,15 +309,15 @@ async def moltrust_credential(
     client = _client(ctx)
 
     if action == "issue":
-        if not client.api_key:
-            return "Error: MOLTRUST_API_KEY environment variable is not set."
+        if not _session_api_key(ctx):
+            return _no_key_message()
         if not subject_did:
             return "Error: subject_did is required for issuing a credential."
 
         resp = await client.http.post(
             "/credentials/issue",
             json={"subject_did": subject_did, "credential_type": credential_type},
-            headers=_auth_headers(client),
+            headers=_auth_headers(ctx),
         )
 
         if resp.status_code != 200:
@@ -410,8 +444,8 @@ async def moltrust_credits(
         return "\n".join(lines)
 
     elif action == "transfer":
-        if not client.api_key:
-            return "Error: MOLTRUST_API_KEY environment variable is not set."
+        if not _session_api_key(ctx):
+            return _no_key_message()
         if not did:
             return "Error: did (sender) is required for transfer."
         if not to_did:
@@ -427,7 +461,7 @@ async def moltrust_credits(
                 "amount": amount,
                 "reference": reference,
             },
-            headers=_auth_headers(client),
+            headers=_auth_headers(ctx),
         )
         if resp.status_code == 402:
             data = resp.json()
@@ -447,15 +481,15 @@ async def moltrust_credits(
         )
 
     elif action == "transactions":
-        if not client.api_key:
-            return "Error: MOLTRUST_API_KEY environment variable is not set."
+        if not _session_api_key(ctx):
+            return _no_key_message()
         if not did:
             return "Error: did is required for transaction history."
 
         resp = await client.http.get(
             f"/credits/transactions/{did}",
             params={"limit": limit, "offset": offset},
-            headers=_auth_headers(client),
+            headers=_auth_headers(ctx),
         )
         if resp.status_code == 403:
             return f"Forbidden: {resp.json().get('detail', 'API key does not own this DID')}"
@@ -537,8 +571,8 @@ async def moltrust_claim_deposit(
         did: Your agent's DID to credit
     """
     client = _client(ctx)
-    if not client.api_key:
-        return "Error: MOLTRUST_API_KEY environment variable is not set."
+    if not _session_api_key(ctx):
+        return _no_key_message()
 
     tx_hash = tx_hash.strip()
     if not tx_hash.startswith("0x") or len(tx_hash) != 66:
@@ -547,7 +581,7 @@ async def moltrust_claim_deposit(
     resp = await client.http.post(
         "/credits/deposit",
         json={"tx_hash": tx_hash, "did": did},
-        headers=_auth_headers(client),
+        headers=_auth_headers(ctx),
     )
 
     if resp.status_code == 400:
@@ -610,12 +644,12 @@ async def moltrust_deposit_history(
         did: The agent's DID
     """
     client = _client(ctx)
-    if not client.api_key:
-        return "Error: MOLTRUST_API_KEY environment variable is not set."
+    if not _session_api_key(ctx):
+        return _no_key_message()
 
     resp = await client.http.get(
         f"/credits/deposits/{did}",
-        headers=_auth_headers(client),
+        headers=_auth_headers(ctx),
     )
 
     if resp.status_code == 403:
@@ -1682,7 +1716,7 @@ async def mt_fantasy_commit(
     resp = await client.http.post(
         "/sports/fantasy/lineups/commit",
         json=body,
-        headers=_auth_headers(client),
+        headers=_auth_headers(ctx),
     )
     if resp.status_code == 409:
         return "Duplicate: Lineup already committed for this contest."
@@ -1789,7 +1823,7 @@ async def mt_fantasy_history(
     client = _client(ctx)
     resp = await client.http.get(
         f"/sports/fantasy/history/{did}",
-        headers=_auth_headers(client),
+        headers=_auth_headers(ctx),
     )
     if resp.status_code == 404:
         return f"Agent {did} not found or has no fantasy history."

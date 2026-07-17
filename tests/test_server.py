@@ -16,7 +16,6 @@ def mock_client():
     http = AsyncMock(spec=httpx.AsyncClient)
     return MolTrustClient(
         http=http,
-        api_key="mt_test_key",
         api_url="https://api.moltrust.ch",
     )
 
@@ -29,9 +28,16 @@ def make_response(status_code: int, json_data: dict) -> httpx.Response:
     )
 
 
-def make_ctx(client: MolTrustClient):
+def make_ctx(client: MolTrustClient, api_key: "str | None" = "mt_test_key"):
+    """Build a per-request ctx. The api_key is resolved request-scoped from
+    ctx.request_context.request.query_params (mirrors the HTTP transport), NOT
+    from the shared client. api_key=None simulates a request with no key."""
     ctx = MagicMock()
     ctx.request_context.lifespan_context = client
+    req = MagicMock()
+    req.query_params = {"api_key": api_key} if api_key else {}
+    req.headers = {}
+    ctx.request_context.request = req
     return ctx
 
 
@@ -71,14 +77,13 @@ class TestMoltrustRegister:
 
     @pytest.mark.asyncio
     async def test_register_no_api_key(self, mock_client):
-        mock_client.api_key = ""
-        ctx = make_ctx(mock_client)
+        ctx = make_ctx(mock_client, api_key=None)
         result = await mcp._tool_manager._tools["moltrust_register"].fn(
             display_name="test",
             platform="test",
             ctx=ctx,
         )
-        assert "MOLTRUST_API_KEY" in result
+        assert "No MolTrust API key" in result
 
     @pytest.mark.asyncio
     async def test_register_duplicate(self, mock_client):
@@ -312,14 +317,13 @@ class TestMoltrustClaimDeposit:
 
     @pytest.mark.asyncio
     async def test_claim_no_api_key(self, mock_client):
-        mock_client.api_key = ""
-        ctx = make_ctx(mock_client)
+        ctx = make_ctx(mock_client, api_key=None)
         result = await mcp._tool_manager._tools["moltrust_claim_deposit"].fn(
             tx_hash="0x" + "a1" * 32,
             did="did:moltrust:abc123def4567890",
             ctx=ctx,
         )
-        assert "MOLTRUST_API_KEY" in result
+        assert "No MolTrust API key" in result
 
     @pytest.mark.asyncio
     async def test_claim_invalid_tx_hash_no_prefix(self, mock_client):
@@ -456,13 +460,12 @@ class TestMoltrustDepositHistory:
 
     @pytest.mark.asyncio
     async def test_history_no_api_key(self, mock_client):
-        mock_client.api_key = ""
-        ctx = make_ctx(mock_client)
+        ctx = make_ctx(mock_client, api_key=None)
         result = await mcp._tool_manager._tools["moltrust_deposit_history"].fn(
             did="did:moltrust:abc123def4567890",
             ctx=ctx,
         )
-        assert "MOLTRUST_API_KEY" in result
+        assert "No MolTrust API key" in result
 
     @pytest.mark.asyncio
     async def test_history_forbidden(self, mock_client):
@@ -2024,3 +2027,71 @@ class TestMtSwarm:
             ctx=ctx,
         )
         assert "403" in result or "Forbidden" in result
+
+
+class TestSessionKeyIsolation:
+    """The session api_key must be request-scoped — resolved per request, never
+    stored/mutated on the lifespan singleton. A shared mutable key would race
+    across concurrent callers → sign/act with the wrong key (impersonation),
+    the same class as the IDOR we closed in the REST layer, but worse."""
+
+    @pytest.mark.asyncio
+    async def test_concurrent_requests_use_own_key(self):
+        # ONE shared client (the lifespan singleton) + TWO overlapping requests
+        # with different keys. Each POST must carry its own caller's key.
+        import asyncio
+
+        calls = []
+
+        async def _post(url, **kw):
+            await asyncio.sleep(0.02)  # hold both requests in-flight together
+            calls.append({"url": url, "json": kw.get("json"),
+                          "headers": kw.get("headers", {})})
+            return make_response(
+                200,
+                {"did": "did:moltrust:abc123def4567890",
+                 "display_name": (kw.get("json") or {}).get("display_name"),
+                 "status": "registered"},
+            )
+
+        http = AsyncMock(spec=httpx.AsyncClient)
+        http.post = _post
+        shared = MolTrustClient(http=http, api_url="https://api.moltrust.ch")
+        ctx_a = make_ctx(shared, api_key="keyA")
+        ctx_b = make_ctx(shared, api_key="keyB")
+        reg = mcp._tool_manager._tools["moltrust_register"].fn
+
+        for _ in range(25):  # repeat to expose any scheduling-dependent bleed
+            calls.clear()
+            await asyncio.gather(
+                reg(display_name="agentA", platform="test", ctx=ctx_a),
+                reg(display_name="agentB", platform="test", ctx=ctx_b),
+            )
+            by_name = {c["json"]["display_name"]: c["headers"].get("X-API-Key")
+                       for c in calls}
+            assert by_name == {"agentA": "keyA", "agentB": "keyB"}, by_name
+
+    @pytest.mark.asyncio
+    async def test_no_key_clean_error_no_env_fallback(self, mock_client, monkeypatch):
+        # A server-wide env key must NOT leak into an HTTP request that has no key.
+        monkeypatch.setenv("MOLTRUST_API_KEY", "SERVER-WIDE-KEY")
+        mock_client.http.post = AsyncMock(return_value=make_response(200, {}))
+        ctx = make_ctx(mock_client, api_key=None)
+        result = await mcp._tool_manager._tools["moltrust_register"].fn(
+            display_name="x", platform="test", ctx=ctx)
+        assert "No MolTrust API key" in result
+        mock_client.http.post.assert_not_called()  # no POST — no fallback to env
+
+    @pytest.mark.asyncio
+    async def test_register_with_session_key_reaches_identity_register(self, mock_client):
+        mock_client.http.post = AsyncMock(return_value=make_response(
+            200, {"did": "did:moltrust:abc123def4567890",
+                  "display_name": "MyAgent", "status": "registered"}))
+        ctx = make_ctx(mock_client, api_key="validkey")
+        result = await mcp._tool_manager._tools["moltrust_register"].fn(
+            display_name="MyAgent", platform="test", ctx=ctx)
+        assert "registered" in result.lower()
+        mock_client.http.post.assert_called_once()
+        args, kwargs = mock_client.http.post.call_args
+        assert args[0] == "/identity/register"
+        assert kwargs["headers"].get("X-API-Key") == "validkey"
