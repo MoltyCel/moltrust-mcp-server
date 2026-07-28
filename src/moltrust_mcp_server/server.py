@@ -2,12 +2,12 @@
 
 import json
 import os
-from contextlib import asynccontextmanager
 from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from dataclasses import dataclass
 
 import httpx
-from mcp.server.fastmcp import FastMCP, Context
+from mcp.server.fastmcp import Context, FastMCP
 from mcp.server.session import ServerSession
 
 API_URL_DEFAULT = "https://api.moltrust.ch"
