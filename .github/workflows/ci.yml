@@ -14,7 +14,11 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: pip install ruff
+      # Pinned on purpose: an unpinned `pip install ruff` tracks every release,
+      # so a new lint rule turns an unrelated PR red. That happened on #14 —
+      # ruff 0.16.0 raised I001 on a file the PR never touched. Bump this line
+      # deliberately, in its own PR, with the fixes it demands.
+      - run: pip install ruff==0.16.0
       - run: ruff check src/
       - run: ruff format --check src/
 
@@ -26,7 +30,9 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install -e ".[dev]" 2>/dev/null || pip install -e .
-      - run: pip install pyright
+      # Pinned for the same reason as ruff above: pyright ships new inference
+      # every release and fails the build on findings that were fine yesterday.
+      - run: pip install pyright==1.1.411
       - run: pyright src/
 
   test:
