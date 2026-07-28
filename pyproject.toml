@@ -1,6 +1,6 @@
 [project]
 name = "moltrust-mcp-server"
-version = "1.2.1"
+version = "1.2.2"
 description = "MCP server for MolTrust — Trust Infrastructure for AI Agents"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -18,7 +18,13 @@ classifiers = [
     "Programming Language :: Python :: 3.13",
 ]
 dependencies = [
-    "mcp>=1.0.0",
+    # Security floor, not a preference. Below 1.28.1 the SDK carries three
+    # advisories: GHSA-jpw9-pfvf-9f58 (HTTP transports route session requests
+    # without verifying the requester), GHSA-hvrp-rf83-w775 (experimental task
+    # handlers reachable across sessions) and GHSA-vj7q-gjh5-988w (WebSocket
+    # transport skips Host/Origin validation). The first one hits the transport
+    # this server actually runs.
+    "mcp>=1.28.1",
     "httpx>=0.27.0",
 ]
 
