@@ -29,14 +29,18 @@ def make_response(status_code: int, json_data: dict) -> httpx.Response:
 
 
 def make_ctx(client: MolTrustClient, api_key: "str | None" = "mt_test_key"):
-    """Build a per-request ctx. The api_key is resolved request-scoped from
-    ctx.request_context.request.query_params (mirrors the HTTP transport), NOT
-    from the shared client. api_key=None simulates a request with no key."""
+    """Build a per-request ctx. The api_key is resolved request-scoped from the
+    X-API-Key header (mirrors the HTTP transport), NOT from the shared client.
+    api_key=None simulates a request with no key.
+
+    Query parameters are left empty on purpose: a key in the query string ends
+    up in every access log along the way, so the server no longer reads one.
+    """
     ctx = MagicMock()
     ctx.request_context.lifespan_context = client
     req = MagicMock()
-    req.query_params = {"api_key": api_key} if api_key else {}
-    req.headers = {}
+    req.query_params = {}
+    req.headers = {"x-api-key": api_key} if api_key else {}
     ctx.request_context.request = req
     return ctx
 
