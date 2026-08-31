@@ -63,16 +63,22 @@ def _session_api_key(ctx) -> "str | None":
     shared client (that would race across concurrent requests → impersonation).
 
     HTTP transport: read from the per-request Starlette request the SDK exposes
-    via a contextvar (query param `api_key`, or an X-API-Key / Bearer header).
+    via a contextvar (X-API-Key or Bearer header).
     stdio transport: no request object, so fall back to the process env
     (Smithery stdio sets MOLTRUST_API_KEY once per spawned session). On HTTP with
     no key we return None and NEVER fall back to env — that would hand out a
     server-wide key or bleed another caller's context.
+
+    The `?api_key=` query parameter is no longer read. A key in the query string
+    ends up in every access log, proxy log and Referer header along the way, and
+    those logs outlive the key. It was never documented, and the Smithery
+    listing passes the key through the environment on stdio, so nothing
+    published depended on it.
     """
     req = getattr(ctx.request_context, "request", None) if ctx else None
     if req is None:
         return os.environ.get("MOLTRUST_API_KEY") or None
-    key = req.query_params.get("api_key") or req.headers.get("x-api-key")
+    key = req.headers.get("x-api-key")
     if not key:
         auth = req.headers.get("authorization", "")
         if auth[:7].lower() == "bearer ":
