@@ -7,70 +7,98 @@
 
 MCP server for [MolTrust](https://moltrust.ch) — Trust Infrastructure for AI Agents.
 
-30 tools across 6 verticals: identity, on-chain trust scoring, prediction market track records, prediction market integrity, autonomous commerce, and agent skill verification — all through the [Model Context Protocol](https://modelcontextprotocol.io).
+53 tools across 12 areas: identity and credentials, on-chain trust scoring, mandate conformance, swarm intelligence, verified badges, autonomous commerce, booking trust, agent skill verification, prediction market track records, fantasy lineup commitments, music provenance, and brand and reseller provenance — all through the [Model Context Protocol](https://modelcontextprotocol.io).
 
 ## Tools
 
 ### Identity & Credentials (11 tools)
 
-| Tool | Description |
-|------|-------------|
-| `moltrust_register` | Register a new AI agent. Returns DID + Verifiable Credential. |
-| `moltrust_verify` | Verify an agent by DID. Returns verification status + trust card. |
-| `moltrust_reputation` | Get reputation score (1-5) and total ratings for a DID. |
-| `moltrust_rate` | Rate another agent (1-5 stars). |
-| `moltrust_credential` | Issue or verify a W3C Verifiable Credential. |
-| `moltrust_credits` | Check balance, view pricing, transfer credits, or view history. |
-| `moltrust_deposit_info` | Get USDC deposit instructions (Base L2). |
-| `moltrust_claim_deposit` | Claim credits from a USDC deposit on Base. |
-| `moltrust_stats` | Get MolTrust network statistics. |
-| `moltrust_deposit_history` | Get USDC deposit history for an agent. |
-| `moltrust_erc8004` | Query the ERC-8004 on-chain agent registry on Base. |
+- `moltrust_claim_deposit` — Claim MolTrust credits from a USDC deposit on Base.
+- `moltrust_credential` — Issue or verify a W3C Verifiable Credential.
+- `moltrust_credits` — Manage MolTrust credits: check balance, view pricing, transfer credits, or view transaction history.
+- `moltrust_deposit_history` — Get USDC deposit history for an agent.
+- `moltrust_deposit_info` — Get USDC deposit instructions to buy MolTrust credits.
+- `moltrust_erc8004` — Query the ERC-8004 on-chain agent registry on Base.
+- `moltrust_rate` — Rate another AI agent (1-5 stars).
+- `moltrust_register` — Register a new AI agent on MolTrust.
+- `moltrust_reputation` — Get the reputation score for an AI agent.
+- `moltrust_stats` — Get MolTrust network statistics.
+- `moltrust_verify` — Verify an AI agent by its DID.
 
 ### MoltGuard — Agent Trust Scoring (7 tools)
 
-| Tool | Description |
-|------|-------------|
-| `moltguard_score` | Get a 0-100 trust score for a Base wallet address. |
-| `moltguard_detail` | Get a detailed trust report with full scoring breakdown. |
-| `moltguard_sybil` | Scan a wallet for Sybil indicators and funding clusters. |
-| `moltguard_market` | Check a Polymarket market for integrity anomalies. |
-| `moltguard_feed` | Get the top anomaly feed — markets with highest concerns. |
-| `moltguard_credential_issue` | Issue an AgentTrustCredential (W3C VC) for a wallet. |
-| `moltguard_credential_verify` | Verify a MoltGuard credential JWS signature. |
+- `moltguard_credential_issue` — Issue a W3C Verifiable Credential (AgentTrustCredential) for a wallet.
+- `moltguard_credential_verify` — Verify a MoltGuard Verifiable Credential JWS signature.
+- `moltguard_detail` — Get a detailed agent trust report for a Base wallet address.
+- `moltguard_feed` — Get the top anomaly feed — markets with highest integrity concerns.
+- `moltguard_market` — Check a Polymarket prediction market for integrity anomalies.
+- `moltguard_score` — Get an agent trust score for a Base wallet address.
+- `moltguard_sybil` — Scan a Base wallet for Sybil indicators.
+
+### MoltProof — Mandate Conformance (5 tools)
+
+- `moltproof_evidence` — Verdict plus the decoded transactions that breached the mandate.
+- `moltproof_mandate` — The committed AAE mandate for an agent (venues, position cap, validity).
+- `moltproof_registry` — Agents with committed mandates and their current verdict.
+- `moltproof_verdict` — Verdict + per-check breakdown for an agent against its committed mandate.
+- `moltproof_verify` — Recompute a verdict from public inputs and check its signature.
+
+### Swarm Intelligence (4 tools)
+
+- `mt_get_swarm_graph` — Get the trust propagation graph for an agent (2 hops).
+- `mt_get_swarm_stats` — Get global Swarm Intelligence statistics.
+- `mt_get_trust_score` — Get the Swarm Intelligence Trust Score for an agent (Phase 2).
+- `mt_register_seed` — Register a trusted seed agent in the Swarm Intelligence network (admin only).
+
+### Verified Badges (3 tools)
+
+- `mt_check_badge` — Quick check: is this agent badge-verified by MolTrust?
+- `mt_get_badge` — Get the Verified by MolTrust badge status for an agent.
+- `mt_issue_badge` — Issue a Verified by MolTrust badge for an agent.
 
 ### MT Shopping — Autonomous Commerce (3 tools)
 
-| Tool | Description |
-|------|-------------|
-| `mt_shopping_info` | Get MT Shopping API info and BuyerAgentCredential schema. |
-| `mt_shopping_verify` | Verify a shopping transaction against a BuyerAgentCredential. |
-| `mt_shopping_issue_vc` | Issue a BuyerAgentCredential with spend limits. |
+- `mt_shopping_info` — Get MT Shopping API information.
+- `mt_shopping_issue_vc` — Issue a BuyerAgentCredential (W3C Verifiable Credential) for a shopping agent.
+- `mt_shopping_verify` — Verify a shopping transaction against a BuyerAgentCredential.
 
 ### MT Travel — Booking Trust (3 tools)
 
-| Tool | Description |
-|------|-------------|
-| `mt_travel_info` | Get MT Travel service info and supported segments. |
-| `mt_travel_verify` | Verify a travel booking against a TravelAgentCredential. |
-| `mt_travel_issue_vc` | Issue a TravelAgentCredential with segment permissions. |
+- `mt_travel_info` — Get MT Travel service information and available endpoints.
+- `mt_travel_issue_vc` — Issue a TravelAgentCredential (W3C Verifiable Credential) for a booking agent.
+- `mt_travel_verify` — Verify a travel booking against a TravelAgentCredential.
 
-### MT Skills — Agent Skill Verification (3 tools)
+### MT Skills — Agent Skill Verification (5 tools)
 
-| Tool | Description |
-|------|-------------|
-| `mt_skill_audit` | Audit a SKILL.md for prompt injection, exfiltration, scope violations. |
-| `mt_skill_verify` | Verify a skill by its canonical SHA-256 hash. |
-| `mt_skill_issue_vc` | Issue a VerifiedSkillCredential after security audit. |
+- `mt_create_interaction_proof` — Create an interaction proof before issuing a SkillEndorsementCredential.
+- `mt_endorse_agent` — Issue a W3C SkillEndorsementCredential for another agent.
+- `mt_skill_audit` — Audit an AI agent skill (SKILL.md) for security risks.
+- `mt_skill_issue_vc` — Issue a VerifiedSkillCredential for an AI agent skill.
+- `mt_skill_verify` — Verify an AI agent skill by its canonical SHA-256 hash.
 
 ### MT Prediction — Market Track Records (3 tools)
 
-| Tool | Description |
-|------|-------------|
-| `mt_prediction_link` | Link a prediction market wallet and sync its track record. |
-| `mt_prediction_wallet` | Get prediction market profile, score, and recent events. |
-| `mt_prediction_leaderboard` | Get the prediction market leaderboard — top wallets by score. |
+- `mt_prediction_leaderboard` — Get the prediction market leaderboard — top wallets by prediction score.
+- `mt_prediction_link` — Link a prediction market wallet and sync its track record.
+- `mt_prediction_wallet` — Get prediction market profile and track record for a wallet.
 
+### MT Sports — Fantasy Lineup Commitments (3 tools)
+
+- `mt_fantasy_commit` — Commit a fantasy lineup with a SHA-256 hash anchored on Base L2.
+- `mt_fantasy_history` — Get fantasy lineup history and stats for an agent.
+- `mt_fantasy_verify` — Verify a fantasy lineup commitment. Public endpoint, no auth required.
+
+### MT Music — Provenance (3 tools)
+
+- `mt_get_track_provenance` — Get full provenance details for a music credential.
+- `mt_issue_music_credential` — Issue a VerifiedMusicCredential for an AI-generated music track.
+- `mt_verify_music_credential` — Verify a VerifiedMusicCredential by its ID.
+
+### MT Salesguard — Brand & Reseller Provenance (3 tools)
+
+- `mt_salesguard_register` — Register a brand with MT Salesguard.
+- `mt_salesguard_reseller` — Verify reseller authorization via MT Salesguard.
+- `mt_salesguard_verify` — Verify product provenance via MT Salesguard.
 ## Setup
 
 Get an API key at [api.moltrust.ch/auth/signup](https://api.moltrust.ch/auth/signup).
