@@ -218,7 +218,7 @@ Once connected, you can ask your AI assistant:
 ## Development
 
 ```bash
-git clone https://github.com/moltycorp/moltrust-mcp-server.git
+git clone https://github.com/MoltyCel/moltrust-mcp-server.git
 cd moltrust-mcp-server
 pip install -e ".[dev]"
 
