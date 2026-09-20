@@ -1,4 +1,4 @@
-name: Publish to PyPI
+name: Publish to PyPI and the MCP registry
 
 on:
   push:
@@ -35,3 +35,51 @@ jobs:
       - run: pip install build
       - run: python -m build
       - uses: pypa/gh-action-pypi-publish@release/v1
+
+  mcp-registry:
+    # The registry entry sat at 0.7.0 while PyPI was at 1.2.2 — five versions
+    # and four months — because nothing ever published it. A release that
+    # updates one index and not the other is how that happens, so this runs off
+    # the same tag.
+    needs: publish
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write   # GitHub OIDC, so no device flow and no stored secret
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fail if server.json disagrees with the package
+        # Two version numbers in one repo drift silently. Catching it here
+        # costs a second; catching it in the registry costs a release.
+        run: |
+          pkg=$(grep -m1 '^version' pyproject.toml | sed 's/.*"\(.*\)".*/\1/')
+          srv=$(python3 -c "import json;print(json.load(open('server.json'))['version'])")
+          tag="${GITHUB_REF_NAME#v}"
+          echo "pyproject=$pkg server.json=$srv tag=$tag"
+          [ "$pkg" = "$srv" ] || { echo "::error::server.json $srv != pyproject $pkg"; exit 1; }
+          [ "$pkg" = "$tag" ] || { echo "::error::tag $tag != pyproject $pkg"; exit 1; }
+
+      - name: Install mcp-publisher
+        run: |
+          curl -fsSL "https://github.com/modelcontextprotocol/registry/releases/latest/download/mcp-publisher_linux_amd64.tar.gz" \
+            | tar xz mcp-publisher
+          sudo mv mcp-publisher /usr/local/bin/
+
+      - name: Validate the record before sending it
+        run: mcp-publisher validate
+
+      - name: Publish
+        run: |
+          mcp-publisher login github-oidc
+          mcp-publisher publish
+
+      - name: Confirm the registry actually took it
+        # A publish that reports success and leaves the index unchanged is the
+        # failure mode worth catching, so the tag is read back.
+        run: |
+          sleep 10
+          got=$(curl -fsS "https://registry.modelcontextprotocol.io/v0/servers?search=moltrust-mcp-server" \
+                | python3 -c "import json,sys;v=[s['server']['version'] for s in json.load(sys.stdin)['servers']];print(max(v) if v else '')")
+          echo "registry now reports: $got"
+          [ "$got" = "${GITHUB_REF_NAME#v}" ] || { echo "::error::registry shows $got, expected ${GITHUB_REF_NAME#v}"; exit 1; }
