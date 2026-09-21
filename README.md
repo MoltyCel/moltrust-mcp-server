@@ -4,6 +4,7 @@
 [![PyPI](https://img.shields.io/pypi/v/moltrust-mcp-server)](https://pypi.org/project/moltrust-mcp-server/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Glama](https://img.shields.io/badge/Glama-listed-blue)](https://glama.ai/mcp/servers/@MoltyCel/moltrust-mcp-server)
+[![Smithery](https://img.shields.io/badge/Smithery-listed-8A2BE2)](https://smithery.ai/servers/moltrust/moltrust-mcp-server)
 
 MCP server for [MolTrust](https://moltrust.ch) — Trust Infrastructure for AI Agents.
 
