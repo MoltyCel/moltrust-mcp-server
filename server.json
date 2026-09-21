@@ -7,7 +7,7 @@
     "url": "https://github.com/MoltyCel/moltrust-mcp-server",
     "source": "github"
   },
-  "version": "1.2.2",
+  "version": "1.2.3",
   "remotes": [
     {
       "type": "streamable-http",
@@ -17,7 +17,7 @@
           "name": "X-API-Key",
           "value": "{api_key}",
           "isSecret": true,
-          "description": "Your MolTrust API key (authenticates identity/credits/register tools). Optional \u2014 read-only tools work without it."
+          "description": "Your MolTrust API key (authenticates identity/credits/register tools). Optional — read-only tools work without it."
         }
       ]
     }
