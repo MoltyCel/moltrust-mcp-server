@@ -1,6 +1,7 @@
 """MolTrust MCP Server — Trust Infrastructure for AI Agents."""
 
 import json
+import re
 import os
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
@@ -109,6 +110,43 @@ def _fmt(data: dict) -> str:
 # ---------------------------------------------------------------------------
 
 
+
+# W3C DID Core §3.1. The same grammar the MolTrust API and the MoltGuard gate
+# use, so a DID this package accepts is one they accept too.
+_DID_IDCHAR = r"(?:[A-Za-z0-9._-]|%[0-9A-Fa-f]{2})"
+_DID_RE = re.compile(rf"^did:[a-z0-9]+:(?:{_DID_IDCHAR}*:)*{_DID_IDCHAR}+$")
+
+
+def _check_did(did: str, field: str = "did") -> "str | None":
+    """None when the DID is well formed, otherwise what to tell the model.
+
+    This package forwarded whatever it was given straight into the URL. The
+    server log for September carries the result: `did:moltrust:` with nothing
+    after it, and `admin` — a model copying the placeholder out of a docstring
+    and a model guessing. Both cost a round trip and came back as a 400 the
+    model then had to interpret.
+
+    Caught here, the answer names the mistake while the model still has the
+    context to fix it.
+    """
+    if not isinstance(did, str) or not did.strip():
+        return f"{field} is required. Expected did:<method>:<identifier>, " \
+               f"for example did:moltrust:157224190be24072."
+    did = did.strip()
+    if _DID_RE.match(did):
+        return None
+    if did.endswith(":"):
+        return f"{field}={did!r} has no identifier after the method. A full DID " \
+               f"looks like did:moltrust:157224190be24072 — the part after the " \
+               f"second colon is the agent's identifier, not a placeholder."
+    if not did.startswith("did:"):
+        return f"{field}={did!r} is not a DID. Prepend the method, e.g. " \
+               f"did:moltrust:{did} if that is a MolTrust identifier. A wallet " \
+               f"address or an agent name is not a DID."
+    return f"{field}={did!r} is not a well-formed DID. Expected " \
+           f"did:<method>:<identifier> per W3C DID Core §3.1."
+
+
 @mcp.tool()
 async def moltrust_register(
     display_name: str,
@@ -179,6 +217,9 @@ async def moltrust_verify(
     Args:
         did: Decentralised identifier (e.g. "did:moltrust:a1b2c3d4e5f60718")
     """
+    _problem = _check_did(did)
+    if _problem:
+        return _problem
     client = _client(ctx)
 
     # Fetch verification status and trust card in parallel
@@ -233,6 +274,9 @@ async def moltrust_reputation(
     Args:
         did: Decentralised identifier (e.g. "did:moltrust:a1b2c3d4e5f60718")
     """
+    _problem = _check_did(did)
+    if _problem:
+        return _problem
     client = _client(ctx)
 
     resp = await client.http.get(f"/reputation/query/{did}")
@@ -408,6 +452,10 @@ async def moltrust_credits(
         limit: Max transactions to return (default 20, for "transactions")
         offset: Pagination offset (default 0, for "transactions")
     """
+    if did:
+        _problem = _check_did(did)
+        if _problem:
+            return _problem
     assert ctx is not None
     client = _client(ctx)
 
@@ -576,6 +624,9 @@ async def moltrust_claim_deposit(
         tx_hash: Base blockchain transaction hash (0x...)
         did: Your agent's DID to credit
     """
+    _problem = _check_did(did)
+    if _problem:
+        return _problem
     client = _client(ctx)
     if not _session_api_key(ctx):
         return _no_key_message()
@@ -649,6 +700,9 @@ async def moltrust_deposit_history(
     Args:
         did: The agent's DID
     """
+    _problem = _check_did(did)
+    if _problem:
+        return _problem
     client = _client(ctx)
     if not _session_api_key(ctx):
         return _no_key_message()
@@ -703,6 +757,10 @@ async def moltrust_erc8004(
         did: Agent DID (required for "card", e.g. "did:moltrust:a1b2c3d4e5f60718")
         agent_id: On-chain ERC-8004 agent ID (required for "resolve", e.g. 21023)
     """
+    if did:
+        _problem = _check_did(did)
+        if _problem:
+            return _problem
     assert ctx is not None
     client = _client(ctx)
 
@@ -1396,6 +1454,10 @@ async def mt_prediction_link(
         platform: Platform name (default: "polymarket")
         did: Optional MolTrust DID to link (e.g. "did:moltrust:a1b2c3d4e5f60718")
     """
+    if did:
+        _problem = _check_did(did)
+        if _problem:
+            return _problem
     assert ctx is not None
     client = _client(ctx)
     body: dict = {"address": address, "platform": platform}
@@ -1825,6 +1887,9 @@ async def mt_fantasy_history(
     Args:
         did: Agent DID (e.g. "did:moltrust:a1b2c3d4e5f67890")
     """
+    _problem = _check_did(did)
+    if _problem:
+        return _problem
     assert ctx is not None
     client = _client(ctx)
     resp = await client.http.get(
@@ -1995,6 +2060,9 @@ async def mt_get_trust_score(
     Args:
         did: DID of the agent to score (e.g. "did:moltrust:a1b2c3d4e5f67890")
     """
+    _problem = _check_did(did)
+    if _problem:
+        return _problem
     assert ctx is not None
     client = _client(ctx)
     resp = await client.http.get(f"/skill/trust-score/{did}")
@@ -2047,6 +2115,9 @@ async def mt_get_swarm_graph(
     Args:
         did: DID of the agent to get graph for
     """
+    _problem = _check_did(did)
+    if _problem:
+        return _problem
     assert ctx is not None
     client = _client(ctx)
     resp = await client.http.get(f"/swarm/graph/{did}")
@@ -2130,6 +2201,9 @@ async def mt_register_seed(
         base_score: Base trust score (0-100, default 80)
         admin_key: Admin key for authorization
     """
+    _problem = _check_did(did)
+    if _problem:
+        return _problem
     assert ctx is not None
     client = _client(ctx)
     resp = await client.http.post(
@@ -2166,6 +2240,9 @@ async def mt_get_badge(
     Args:
         did: The DID of the agent to check
     """
+    _problem = _check_did(did)
+    if _problem:
+        return _problem
     assert ctx is not None
     client = _client(ctx)
     resp = await client.http.get(f"/identity/badge/{did}")
@@ -2211,6 +2288,9 @@ async def mt_issue_badge(
         did: The DID of the agent to issue a badge for
         tier: Badge tier — 'verified' or 'trusted'
     """
+    _problem = _check_did(did)
+    if _problem:
+        return _problem
     assert ctx is not None
     client = _client(ctx)
     resp = await client.http.post(
@@ -2247,6 +2327,9 @@ async def mt_check_badge(
     Args:
         did: The DID of the agent to check
     """
+    _problem = _check_did(did)
+    if _problem:
+        return _problem
     assert ctx is not None
     client = _client(ctx)
     resp = await client.http.get(f"/identity/badge/check/{did}")
