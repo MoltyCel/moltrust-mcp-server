@@ -1,8 +1,8 @@
 """MolTrust MCP Server — Trust Infrastructure for AI Agents."""
 
 import json
-import re
 import os
+import re
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
@@ -110,7 +110,6 @@ def _fmt(data: dict) -> str:
 # ---------------------------------------------------------------------------
 
 
-
 # W3C DID Core §3.1. The same grammar the MolTrust API and the MoltGuard gate
 # use, so a DID this package accepts is one they accept too.
 _DID_IDCHAR = r"(?:[A-Za-z0-9._-]|%[0-9A-Fa-f]{2})"
@@ -130,21 +129,29 @@ def _check_did(did: str, field: str = "did") -> "str | None":
     context to fix it.
     """
     if not isinstance(did, str) or not did.strip():
-        return f"{field} is required. Expected did:<method>:<identifier>, " \
-               f"for example did:moltrust:157224190be24072."
+        return (
+            f"{field} is required. Expected did:<method>:<identifier>, "
+            f"for example did:moltrust:157224190be24072."
+        )
     did = did.strip()
     if _DID_RE.match(did):
         return None
     if did.endswith(":"):
-        return f"{field}={did!r} has no identifier after the method. A full DID " \
-               f"looks like did:moltrust:157224190be24072 — the part after the " \
-               f"second colon is the agent's identifier, not a placeholder."
+        return (
+            f"{field}={did!r} has no identifier after the method. A full DID "
+            f"looks like did:moltrust:157224190be24072 — the part after the "
+            f"second colon is the agent's identifier, not a placeholder."
+        )
     if not did.startswith("did:"):
-        return f"{field}={did!r} is not a DID. Prepend the method, e.g. " \
-               f"did:moltrust:{did} if that is a MolTrust identifier. A wallet " \
-               f"address or an agent name is not a DID."
-    return f"{field}={did!r} is not a well-formed DID. Expected " \
-           f"did:<method>:<identifier> per W3C DID Core §3.1."
+        return (
+            f"{field}={did!r} is not a DID. Prepend the method, e.g. "
+            f"did:moltrust:{did} if that is a MolTrust identifier. A wallet "
+            f"address or an agent name is not a DID."
+        )
+    return (
+        f"{field}={did!r} is not a well-formed DID. Expected "
+        f"did:<method>:<identifier> per W3C DID Core §3.1."
+    )
 
 
 @mcp.tool()
