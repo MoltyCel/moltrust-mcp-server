@@ -154,6 +154,41 @@ def _check_did(did: str, field: str = "did") -> "str | None":
     )
 
 
+def _withheld_lines(
+    data: dict,
+    *,
+    subject: str,
+    default_reason: str | None = None,
+) -> "list[str] | None":
+    """The three answers MolTrust can give, kept apart in the text.
+
+    `verified: false` covers two different findings. One is that we looked and
+    there is nothing: a did:moltrust we never registered. The other is that we
+    hold no opinion at all, because the DID belongs to a method we do not issue
+    or the score has too few endorsers behind it. The API separates them with
+    `withheld` and explains itself in `withheld_reason` and `note`.
+
+    Until 1.2.4 the package threw all of that away. A well-formed
+    `did:web:example.com` came back as "Agent not found in MolTrust registry",
+    which a model reads as a checked negative — the note the API sends says in
+    so many words that it is not one.
+
+    Returns None when nothing is withheld, so a caller renders its normal
+    output and this stays out of the way.
+    """
+    if not data.get("withheld"):
+        return None
+    lines = [f"{subject}: WITHHELD — we hold no finding, which is not a negative one"]
+    reason = data.get("withheld_reason") or default_reason
+    if reason:
+        lines.append(f"Reason: {reason}")
+    if data.get("note"):
+        # Verbatim. The API writes this for the reader, and paraphrasing it here
+        # is how the distinction got lost the first time.
+        lines.append(f"Note: {data['note']}")
+    return lines
+
+
 @mcp.tool()
 async def moltrust_register(
     display_name: str,
@@ -242,6 +277,11 @@ async def moltrust_verify(
 
     v = verify_resp.json()
     verified = v.get("verified", False)
+
+    # A withheld answer never falls through to "not found" below.
+    withheld = _withheld_lines(v, subject="Verified")
+    if withheld:
+        return "\n".join([f"DID:      {did}", *withheld])
 
     lines = [
         f"DID:      {did}",
@@ -833,6 +873,25 @@ async def moltrust_erc8004(
             lines.append("")
             lines.append(f"MolTrust DID:     {data['moltrust_did']}")
             lines.append(f"MolTrust Profile: {data.get('moltrust_profile', '?')}")
+        # The reverse lookup carries a MolTrust score, and it can be withheld.
+        # Dropping it entirely was the quietest version of the same defect:
+        # the caller saw an on-chain agent with no MolTrust line at all.
+        ts = data.get("moltrust_trust_score") or {}
+        if ts:
+            lines.append("")
+            ts_withheld = _withheld_lines(
+                ts,
+                subject="MolTrust trust score",
+                default_reason="fewer than 3 independent endorsers",
+            )
+            if ts_withheld:
+                lines.extend(ts_withheld)
+            else:
+                lines.append(
+                    f"MolTrust trust score: {ts.get('score')} (grade {ts.get('grade', '?')})"
+                )
+            if ts.get("verify_url"):
+                lines.append(f"Verify: {ts['verify_url']}")
         if rep and rep.get("count", 0) > 0:
             lines.append("")
             lines.append(
@@ -2078,13 +2137,20 @@ async def mt_get_trust_score(
     data = resp.json()
     score = data.get("trust_score")
     breakdown = data.get("breakdown", {})
-    if data.get("withheld"):
+    withheld = _withheld_lines(
+        data,
+        subject="Score",
+        # The old text asserted this reason for every withheld score. It is the
+        # common one and stays the fallback, but a did:web is withheld for a
+        # different reason entirely, and the API says which.
+        default_reason="fewer than 3 independent endorsers",
+    )
+    if withheld:
         lines = [
             f"Trust Score for {data.get('did', did)}",
             "",
-            "Score: WITHHELD (fewer than 3 independent endorsers)",
+            *withheld,
             f"Current Endorsers: {data.get('endorser_count', 0)}",
-            "Need at least 3 endorsers from different verticals.",
         ]
     else:
         grade = data.get("grade", "N/A")
@@ -2256,6 +2322,20 @@ async def mt_get_badge(
     if resp.status_code != 200:
         return f"Error: {resp.status_code} — {resp.text[:200]}"
     data = resp.json()
+    withheld = _withheld_lines(
+        data,
+        subject="Badge Status",
+        default_reason="the agent's trust score is withheld, so no tier can be issued",
+    )
+    if withheld:
+        return "\n".join(
+            [
+                *withheld,
+                "",
+                f"DID: {data.get('did', did)}",
+                f"Verify: {data.get('verify_url')}",
+            ]
+        )
     if not data.get("verified"):
         return (
             f"Badge Status: Not Verified\n\n"

@@ -1,5 +1,27 @@
 # Changelog — moltrust-mcp-server
 
+## 1.2.4
+
+Withheld is not "not found", and the tools now say so.
+
+`verified: false` covers two findings that mean opposite things to whoever
+reads the answer. One is that we looked and there is nothing — a did:moltrust
+we never registered. The other is that we hold no opinion: the DID belongs to a
+method we do not issue, or the score has too few endorsers behind it. The API
+has always separated them with `withheld`, `withheld_reason` and a note that
+says in so many words that withheld is not a negative finding.
+
+This package threw that away. A well-formed `did:web:example.com` came back as
+"Agent not found in MolTrust registry" — a checked negative, reported for an
+answer that was never checked. `moltrust_verify`, `mt_get_badge` and
+`moltrust_erc8004` rendered no withheld at all; `mt_get_trust_score` rendered
+it but asserted one fixed reason for every case, so a foreign DID was reported
+as short of endorsers.
+
+Four tools, three states apart, and the reason and note carried verbatim rather
+than paraphrased. The vectors the tests run on are recorded from the live API,
+because the claim under test is that the package renders what the API sends.
+
 ## 1.2.3
 
 Every tool that takes a DID checks its form before the call.

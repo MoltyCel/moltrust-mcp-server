@@ -1,0 +1,226 @@
+{
+ "recorded_against": "https://api.moltrust.ch",
+ "vectors": [
+  {
+   "path": "/identity/verify/did:web:example.com",
+   "response": {
+    "credentials": [],
+    "did": "did:web:example.com",
+    "erc8004": null,
+    "note": "MolTrust issues did:moltrust identifiers. This DID is well-formed and belongs to another method, so we hold no registration or credentials for it. Withheld is not a negative finding.",
+    "registration_tx": null,
+    "reputation": null,
+    "verified": false,
+    "withheld": true,
+    "withheld_reason": "did_method_not_issued_here"
+   },
+   "subkey": null,
+   "tool": "moltrust_verify",
+   "withheld_payload": {
+    "credentials": [],
+    "did": "did:web:example.com",
+    "erc8004": null,
+    "note": "MolTrust issues did:moltrust identifiers. This DID is well-formed and belongs to another method, so we hold no registration or credentials for it. Withheld is not a negative finding.",
+    "registration_tx": null,
+    "reputation": null,
+    "verified": false,
+    "withheld": true,
+    "withheld_reason": "did_method_not_issued_here"
+   }
+  },
+  {
+   "path": "/skill/trust-score/did:web:example.com",
+   "response": {
+    "breakdown": {
+     "computation_method": "not_evaluated"
+    },
+    "cache_valid_until": null,
+    "computed_at": null,
+    "consistency_level": "L1",
+    "did": "did:web:example.com",
+    "endorser_count": 0,
+    "evaluation_context": {
+     "cache_valid_seconds": 0,
+     "evaluated_at": null,
+     "policy_version": "not_evaluated"
+    },
+    "flag_count": 0,
+    "flags": [],
+    "grade": "N/A",
+    "note": "MolTrust issues did:moltrust identifiers. A withheld score is not a low score \u2014 it says we have not evaluated this subject.",
+    "trust_score": null,
+    "valid_until": null,
+    "withheld": true,
+    "withheld_reason": "did_method_not_issued_here"
+   },
+   "subkey": null,
+   "tool": "mt_get_trust_score",
+   "withheld_payload": {
+    "breakdown": {
+     "computation_method": "not_evaluated"
+    },
+    "cache_valid_until": null,
+    "computed_at": null,
+    "consistency_level": "L1",
+    "did": "did:web:example.com",
+    "endorser_count": 0,
+    "evaluation_context": {
+     "cache_valid_seconds": 0,
+     "evaluated_at": null,
+     "policy_version": "not_evaluated"
+    },
+    "flag_count": 0,
+    "flags": [],
+    "grade": "N/A",
+    "note": "MolTrust issues did:moltrust identifiers. A withheld score is not a low score \u2014 it says we have not evaluated this subject.",
+    "trust_score": null,
+    "valid_until": null,
+    "withheld": true,
+    "withheld_reason": "did_method_not_issued_here"
+   }
+  },
+  {
+   "path": "/identity/badge/did:moltrust:157224190be24072",
+   "response": {
+    "average_rating": 0.0,
+    "badge_url": "https://api.moltrust.ch/identity/badge/did:moltrust:157224190be24072.svg",
+    "did": "did:moltrust:157224190be24072",
+    "display_name": "moltrust-vet",
+    "expires_at": null,
+    "grade": null,
+    "issued_at": "2026-09-19T09:32:10.413580",
+    "tier": "none",
+    "total_ratings": 0,
+    "trust_score": null,
+    "vc_hash": null,
+    "verified": true,
+    "verify_url": "https://moltrust.ch/verify/did:moltrust:157224190be24072",
+    "withheld": true
+   },
+   "subkey": null,
+   "tool": "mt_get_badge",
+   "withheld_payload": {
+    "average_rating": 0.0,
+    "badge_url": "https://api.moltrust.ch/identity/badge/did:moltrust:157224190be24072.svg",
+    "did": "did:moltrust:157224190be24072",
+    "display_name": "moltrust-vet",
+    "expires_at": null,
+    "grade": null,
+    "issued_at": "2026-09-19T09:32:10.413580",
+    "tier": "none",
+    "total_ratings": 0,
+    "trust_score": null,
+    "vc_hash": null,
+    "verified": true,
+    "verify_url": "https://moltrust.ch/verify/did:moltrust:157224190be24072",
+    "withheld": true
+   }
+  },
+  {
+   "path": "/resolve/erc8004/21351",
+   "response": {
+    "agent_id": 21351,
+    "agent_registry": "eip155:8453:0x8004A169FB4a3325136EB29fA0ceB6D2e539a432",
+    "agent_uri": "https://api.moltrust.ch/agents/did:moltrust:455d06aa3d9d4fac/erc8004",
+    "agent_wallet": "0x380238347e58435f40B4da1F1A045A271D5838F5",
+    "chain": "base",
+    "chain_id": 8453,
+    "moltrust_did": "did:moltrust:455d06aa3d9d4fac",
+    "moltrust_profile": "https://api.moltrust.ch/identity/resolve/did:moltrust:455d06aa3d9d4fac",
+    "moltrust_trust_score": {
+     "grade": null,
+     "score": null,
+     "verify_url": "https://api.moltrust.ch/identity/verify/did:moltrust:455d06aa3d9d4fac",
+     "withheld": true
+    },
+    "onchain_reputation": {
+     "agent_id": 21351,
+     "clients": 1,
+     "count": 1,
+     "decimals": 0,
+     "summary_value": 100
+    },
+    "owner": "0x380238347e58435f40B4da1F1A045A271D5838F5",
+    "registry": "0x8004A169FB4a3325136EB29fA0ceB6D2e539a432"
+   },
+   "subkey": "moltrust_trust_score",
+   "tool": "moltrust_erc8004",
+   "withheld_payload": {
+    "grade": null,
+    "score": null,
+    "verify_url": "https://api.moltrust.ch/identity/verify/did:moltrust:455d06aa3d9d4fac",
+    "withheld": true
+   }
+  },
+  {
+   "path": "/identity/verify/did:moltrust:157224190be24072",
+   "response": {
+    "credentials": [
+     {
+      "anchor": {
+       "block": 51552965,
+       "calldata_format": "utf8:MolTrust/VC/v1/<merkle_root>",
+       "explorer": "https://basescan.org/tx/0x0fc09fb83cdb3d250385aac1bc2e9e8d1973eb078a5a976006307e3b6d777e13",
+       "leaf_rule": "https://moltrust.ch/anchoring.html#leaf",
+       "merkle_proof": {
+        "leaf": "53f9d1631f00ded600fd398c131ccf301b4c32bd07f8714b02036d5eaf675ade",
+        "path": [
+         {
+          "hash": "8c911f9ad282e7e20081d983a66861b7327e18e17f224eb2a75034b1124921e3",
+          "position": "right"
+         },
+         {
+          "hash": "49c56ccd7033c144094155ee32e7f09f76906261a073a7ab45c6fee9f12a01f7",
+          "position": "left"
+         },
+         {
+          "hash": "127dfb7b028baadaf46f3c1ad13b5511376d1c8abeec7ffb595106cdcaf6d9ba",
+          "position": "right"
+         },
+         {
+          "hash": "99fe706699ba1417588dfc17ab473b9406f940b9659647974e0c54ca2a5516fe",
+          "position": "right"
+         },
+         {
+          "hash": "cb8d3c581d53e3f2bb64ba827fc9ee2a7109b183390c6a658587f9210e6943cf",
+          "position": "left"
+         },
+         {
+          "hash": "d9734c85438905647fc678c5db9ef08ef24b05f3f4e22038f6a3e9a6c19593be",
+          "position": "left"
+         },
+         {
+          "hash": "1d1669ef20f6a27cf76c6b36925765298d01b0727d6861fb8dee3e7890d07cf5",
+          "position": "left"
+         },
+         {
+          "hash": "ae93bed67d1b6fca408dcd4b133a347f5c33b1ab6d8d3904183ebed5d83a1f3d",
+          "position": "right"
+         }
+        ],
+        "root": "e3174fd3ed772afdf0d26b2be6d70ef5021cae26fd3c1b8aad558a4a7220edca"
+       },
+       "merkle_root": "e3174fd3ed772afdf0d26b2be6d70ef5021cae26fd3c1b8aad558a4a7220edca",
+       "status": "anchored",
+       "tx_hash": "0x0fc09fb83cdb3d250385aac1bc2e9e8d1973eb078a5a976006307e3b6d777e13"
+      },
+      "expires_at": "2027-09-19T09:32:10.942757",
+      "id": "1047",
+      "issued_at": "2026-09-19T09:32:10.942757",
+      "revoked": false,
+      "type": "AgentTrustCredential"
+     }
+    ],
+    "did": "did:moltrust:157224190be24072",
+    "erc8004": null,
+    "registration_tx": "0xe474bba4d50d3d2030325661aeb3815d6896e8fdfffeb92f99d3eb5f59365ee5",
+    "reputation": 0.0,
+    "verified": true,
+    "withheld": false
+   },
+   "subkey": null,
+   "tool": "moltrust_verify",
+   "withheld_payload": null
+  }
+ ]
+}
