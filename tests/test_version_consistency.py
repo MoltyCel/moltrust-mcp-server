@@ -43,3 +43,21 @@ def test_the_changelog_has_an_entry_for_this_version():
     can tell apart from the one before it."""
     changelog = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
     assert f"\n## {_pyproject_version()}\n" in changelog
+
+
+# The registry caps a few fields and says so only at publish time. v1.2.3
+# reached PyPI and then failed `mcp-publisher validate` with
+# "expected length <= 100" on a 214-character description, which left the wheel
+# published and the registry five versions behind. The limits are cheap to
+# assert here.
+REGISTRY_MAX = {"description": 100, "title": 100, "name": 200}
+
+
+def test_the_registry_field_limits_are_respected():
+    record = json.loads((ROOT / "server.json").read_text(encoding="utf-8"))
+    too_long = {
+        field: len(record[field])
+        for field, cap in REGISTRY_MAX.items()
+        if field in record and len(record[field]) > cap
+    }
+    assert not too_long, f"over the registry cap: {too_long} (caps {REGISTRY_MAX})"
