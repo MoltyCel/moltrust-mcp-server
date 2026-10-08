@@ -89,9 +89,9 @@ def _session_api_key(ctx) -> "str | None":
 
 def _no_key_message() -> str:
     return (
-        "No MolTrust API key in this request. Add your api_key to the MCP server "
-        "config (Smithery: the 'moltrustApiKey' field; or send it as ?api_key=… / "
-        "an X-API-Key header). Need a key? Register at https://api.moltrust.ch."
+        "No MolTrust API key in this request. Send it as an X-API-Key header or "
+        "as Authorization: Bearer <key> (Smithery: the 'moltrustApiKey' field). "
+        "A key in the URL is not read. Need a key? Register at https://api.moltrust.ch."
     )
 
 
