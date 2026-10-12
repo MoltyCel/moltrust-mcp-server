@@ -1,5 +1,17 @@
 # Changelog — moltrust-mcp-server
 
+## 1.2.5
+
+Registry description only; the package code is unchanged.
+
+The hosted remote at `https://api.moltrust.ch/mcp` now also serves three MolTrust
+Ads tools — `ads_onboard`, `ads_mandate_template` and `ads_check` — which give an
+agent that uses the Amazon Ads MCP Server an allow, hold or forbid verdict on an
+intended tool call before it runs. They live in the server repository
+(`services/ads_mcp_tools.py`) and are not part of this package, the same way the
+`moltproof_*` tools are not. The MCP Registry entry lists that remote, so its
+description now says what the remote does.
+
 ## 1.2.4
 
 Withheld is not "not found", and the tools now say so.
