@@ -2,12 +2,12 @@
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.MoltyCel/moltrust-mcp-server",
   "title": "MolTrust MCP Server",
-  "description": "Verifiable agent identity and trust checks; allow/hold/forbid verdicts for Amazon Ads agents.",
+  "description": "Verifiable agent identity and trust checks; MolCheck verdicts on mandates; Amazon Ads verdicts.",
   "repository": {
     "url": "https://github.com/MoltyCel/moltrust-mcp-server",
     "source": "github"
   },
-  "version": "1.2.5",
+  "version": "1.2.6",
   "remotes": [
     {
       "type": "streamable-http",
