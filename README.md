@@ -113,6 +113,56 @@ The former names `moltproof_evidence`, `moltproof_mandate`, `moltproof_registry`
 ## Setup
 
 Get an API key at [api.moltrust.ch/auth/signup](https://api.moltrust.ch/auth/signup).
+The read-only tools also work without one.
+
+### Hosted endpoint (all 61 tools)
+
+The hosted endpoint is `https://api.moltrust.ch/mcp` (streamable HTTP). It serves
+every tool, including the MolCheck verifier and Amazon Ads tools that the pip package
+does not carry. Send the API key as the `X-API-Key` header.
+
+Claude Code:
+
+```bash
+claude mcp add --transport http moltrust https://api.moltrust.ch/mcp \
+  --header "X-API-Key: your_api_key"
+```
+
+Cursor (`.cursor/mcp.json`):
+
+```json
+{
+  "mcpServers": {
+    "moltrust": {
+      "url": "https://api.moltrust.ch/mcp",
+      "headers": { "X-API-Key": "your_api_key" }
+    }
+  }
+}
+```
+
+OpenCode (`opencode.json`):
+
+```json
+{
+  "mcp": {
+    "moltrust": {
+      "type": "remote",
+      "url": "https://api.moltrust.ch/mcp",
+      "enabled": true,
+      "headers": { "X-API-Key": "your_api_key" }
+    }
+  }
+}
+```
+
+The tool list and schemas are published at
+[api.moltrust.ch/.well-known/mcp/server-card.json](https://api.moltrust.ch/.well-known/mcp/server-card.json).
+
+### Local package (48 tools)
+
+The sections below run the pip package locally over stdio with `uvx`. It carries 48
+tools; the MolCheck verifier and Amazon Ads tools are only on the hosted endpoint.
 
 ### Claude Code
 
