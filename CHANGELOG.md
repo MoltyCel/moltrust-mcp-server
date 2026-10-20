@@ -1,5 +1,22 @@
 # Changelog — moltrust-mcp-server
 
+## 1.2.6
+
+Registry description and README only; the package code is unchanged.
+
+The hosted remote at `https://api.moltrust.ch/mcp` serves the MolCheck verifier
+tools `molcheck_verdict`, `molcheck_mandate`, `molcheck_evidence`,
+`molcheck_verify` and `molcheck_registry` since moltrust-api #843; the former
+`moltproof_*` names still answer as deprecated aliases. With the three Amazon Ads
+tools that makes 61 tools at the remote, 48 in this package. The registry
+description names the MolCheck verdicts, and the README counts both numbers.
+
+Smithery no longer accepts new servers (its API answers "Updating servers has
+been removed" since 2026-10-19); the existing listing can be re-published until
+2026-10-31 and is frozen after that. The README now installs against the hosted
+endpoint first. The server card at
+https://api.moltrust.ch/.well-known/mcp/server-card.json lists all 61 tools.
+
 ## 1.2.5
 
 Registry description only; the package code is unchanged.
