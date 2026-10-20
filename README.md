@@ -8,7 +8,7 @@
 
 MCP server for [MolTrust](https://moltrust.ch) — Trust Infrastructure for AI Agents.
 
-53 tools across 12 areas: identity and credentials, on-chain trust scoring, mandate conformance, swarm intelligence, verified badges, autonomous commerce, booking trust, agent skill verification, prediction market track records, fantasy lineup commitments, music provenance, and brand and reseller provenance — all through the [Model Context Protocol](https://modelcontextprotocol.io).
+61 tools at the hosted endpoint `https://api.moltrust.ch/mcp`, across 13 areas: identity and credentials, on-chain trust scoring, mandate conformance, swarm intelligence, verified badges, autonomous commerce, booking trust, agent skill verification, prediction market track records, fantasy lineup commitments, music provenance, brand and reseller provenance, and Amazon Ads verdicts — all through the [Model Context Protocol](https://modelcontextprotocol.io). The pip package carries 48 of them; the MolCheck verifier tools and the Amazon Ads tools run only at the hosted endpoint.
 
 ## Tools
 
@@ -36,13 +36,16 @@ MCP server for [MolTrust](https://moltrust.ch) — Trust Infrastructure for AI A
 - `moltguard_score` — Get an agent trust score for a Base wallet address.
 - `moltguard_sybil` — Scan a Base wallet for Sybil indicators.
 
-### MoltProof — Mandate Conformance (5 tools)
+### MolCheck verifier — Mandate Conformance (5 tools, hosted endpoint only)
 
-- `moltproof_evidence` — Verdict plus the decoded transactions that breached the mandate.
-- `moltproof_mandate` — The committed AAE mandate for an agent (venues, position cap, validity).
-- `moltproof_registry` — Agents with committed mandates and their current verdict.
-- `moltproof_verdict` — Verdict + per-check breakdown for an agent against its committed mandate.
-- `moltproof_verify` — Recompute a verdict from public inputs and check its signature.
+- `molcheck_evidence` — Verdict plus the decoded transactions that breached the mandate.
+- `molcheck_mandate` — The committed AAE mandate for an agent (venues, position cap, validity).
+- `molcheck_registry` — Agents with committed mandates and their current verdict.
+- `molcheck_verdict` — Verdict + per-check breakdown for an agent against its committed mandate.
+- `molcheck_verify` — Recompute a verdict from public inputs and check its signature.
+
+The former names `moltproof_evidence`, `moltproof_mandate`, `moltproof_registry`, `moltproof_verdict` and
+`moltproof_verify` still answer as deprecated aliases of the same tools, so `tools/list` shows 10 entries here.
 
 ### Swarm Intelligence (4 tools)
 
@@ -100,6 +103,13 @@ MCP server for [MolTrust](https://moltrust.ch) — Trust Infrastructure for AI A
 - `mt_salesguard_register` — Register a brand with MT Salesguard.
 - `mt_salesguard_reseller` — Verify reseller authorization via MT Salesguard.
 - `mt_salesguard_verify` — Verify product provenance via MT Salesguard.
+
+### MT Ads — Amazon Ads Verdicts (3 tools, hosted endpoint only)
+
+- `ads_check` — Allow / hold / forbid for one intended Amazon Ads MCP tool call, before it runs.
+- `ads_mandate_template` — Build an ads profile and its AAE mandate for one or more Amazon Ads accounts.
+- `ads_onboard` — How an agent starts with MolTrust Ads: verdicts (allow / hold / forbid) on Amazon Ads tool calls.
+
 ## Setup
 
 Get an API key at [api.moltrust.ch/auth/signup](https://api.moltrust.ch/auth/signup).
