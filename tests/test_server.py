@@ -2099,3 +2099,13 @@ class TestSessionKeyIsolation:
         args, kwargs = mock_client.http.post.call_args
         assert args[0] == "/identity/register"
         assert kwargs["headers"].get("X-API-Key") == "validkey"
+
+
+def test_no_key_message_does_not_invite_a_key_in_the_url():
+    """The server reads the key from X-API-Key or a Bearer header only; a key in
+    the query string is ignored and ends up in access logs along the way."""
+    from moltrust_mcp_server.server import _no_key_message
+
+    msg = _no_key_message()
+    assert "?api_key" not in msg
+    assert "X-API-Key" in msg and "Bearer" in msg
