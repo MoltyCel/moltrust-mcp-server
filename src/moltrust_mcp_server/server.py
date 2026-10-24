@@ -6,10 +6,13 @@ import re
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
+from typing import Annotated
 
 import httpx
 from mcp.server.fastmcp import Context, FastMCP
 from mcp.server.session import ServerSession
+from mcp.types import ToolAnnotations
+from pydantic import Field
 
 API_URL_DEFAULT = "https://api.moltrust.ch"
 GUARD_PREFIX = "/guard"
@@ -105,6 +108,29 @@ def _fmt(data: dict) -> str:
     return json.dumps(data, indent=2)
 
 
+# What a client may run without asking its user. Every tool carries one of
+# these, and tests/test_tool_annotations.py fails on a tool that carries none.
+#
+# The line is money, not writing. A tool that only adds or changes a record is
+# marked non-destructive, so a client may run it without a prompt. A tool that
+# moves money is marked destructive and stays behind the client's confirmation:
+# it charges the caller (credits or an x402 price), moves credits, books a
+# deposit, or makes us pay gas for an on-chain write. A paid read counts too.
+#
+# These are hints. Whether a client asks is still its own decision.
+_READ = ToolAnnotations(readOnlyHint=True)
+_FREE_WRITE = ToolAnnotations(
+    readOnlyHint=False, destructiveHint=False, idempotentHint=False
+)
+_FREE_WRITE_IDEMPOTENT = ToolAnnotations(
+    readOnlyHint=False, destructiveHint=False, idempotentHint=True
+)
+_MONEY = ToolAnnotations(readOnlyHint=False, destructiveHint=True, idempotentHint=False)
+_MONEY_IDEMPOTENT = ToolAnnotations(
+    readOnlyHint=False, destructiveHint=True, idempotentHint=True
+)
+
+
 # ---------------------------------------------------------------------------
 # Tools
 # ---------------------------------------------------------------------------
@@ -189,10 +215,18 @@ def _withheld_lines(
     return lines
 
 
-@mcp.tool()
+@mcp.tool(annotations=_MONEY)
 async def moltrust_register(
-    display_name: str,
-    platform: str,
+    display_name: Annotated[
+        str,
+        Field(
+            description="Agent name (1-64 chars, alphanumeric/dash/underscore/dot/space)"
+        ),
+    ],
+    platform: Annotated[
+        str,
+        Field(description='Platform identifier (e.g. "openai", "langchain", "custom")'),
+    ],
     ctx: Context[ServerSession, MolTrustClient] | None = None,
 ) -> str:
     """Register a new AI agent on MolTrust.
@@ -246,9 +280,14 @@ async def moltrust_register(
     return "\n".join(lines)
 
 
-@mcp.tool()
+@mcp.tool(annotations=_READ)
 async def moltrust_verify(
-    did: str,
+    did: Annotated[
+        str,
+        Field(
+            description='Decentralised identifier (e.g. "did:moltrust:a1b2c3d4e5f60718")'
+        ),
+    ],
     ctx: Context[ServerSession, MolTrustClient] | None = None,
 ) -> str:
     """Verify an AI agent by its DID.
@@ -309,9 +348,14 @@ async def moltrust_verify(
     return "\n".join(lines)
 
 
-@mcp.tool()
+@mcp.tool(annotations=_READ)
 async def moltrust_reputation(
-    did: str,
+    did: Annotated[
+        str,
+        Field(
+            description='Decentralised identifier (e.g. "did:moltrust:a1b2c3d4e5f60718")'
+        ),
+    ],
     ctx: Context[ServerSession, MolTrustClient] | None = None,
 ) -> str:
     """Get the reputation score for an AI agent.
@@ -343,11 +387,23 @@ async def moltrust_reputation(
     return f"DID: {did}\nScore: {score}/5\nTotal ratings: {total}"
 
 
-@mcp.tool()
+@mcp.tool(annotations=_MONEY)
 async def moltrust_rate(
-    from_did: str,
-    to_did: str,
-    score: int,
+    from_did: Annotated[
+        str,
+        Field(
+            description="Your agent's DID (the rater), e.g. did:moltrust:a1b2c3d4e5f60718"
+        ),
+    ],
+    to_did: Annotated[
+        str,
+        Field(
+            description="Target agent's DID (the agent being rated), e.g. did:moltrust:a1b2c3d4e5f60718"
+        ),
+    ],
+    score: Annotated[
+        int, Field(description="Rating from 1 (untrusted) to 5 (highly trusted)")
+    ],
     ctx: Context[ServerSession, MolTrustClient] | None = None,
 ) -> str:
     """Rate another AI agent (1-5 stars).
@@ -386,12 +442,27 @@ async def moltrust_rate(
     )
 
 
-@mcp.tool()
+@mcp.tool(annotations=_MONEY)
 async def moltrust_credential(
-    action: str,
-    subject_did: str = "",
-    credential_type: str = "AgentTrustCredential",
-    credential: str = "",
+    action: Annotated[str, Field(description='Either "issue" or "verify"')],
+    subject_did: Annotated[
+        str,
+        Field(
+            description='DID of the credential subject (required for "issue"), e.g. did:moltrust:a1b2c3d4e5f60718'
+        ),
+    ] = "",
+    credential_type: Annotated[
+        str,
+        Field(
+            description='Type of credential (default: "AgentTrustCredential", only for "issue")'
+        ),
+    ] = "AgentTrustCredential",
+    credential: Annotated[
+        str,
+        Field(
+            description='JSON string of the credential to verify (required for "verify")'
+        ),
+    ] = "",
     ctx: Context[ServerSession, MolTrustClient] | None = None,
 ) -> str:
     """Issue or verify a W3C Verifiable Credential.
@@ -477,15 +548,42 @@ async def moltrust_credential(
         return 'Error: action must be "issue" or "verify".'
 
 
-@mcp.tool()
+@mcp.tool(annotations=_MONEY)
 async def moltrust_credits(
-    action: str,
-    did: str = "",
-    to_did: str = "",
-    amount: int = 0,
-    reference: str = "",
-    limit: int = 20,
-    offset: int = 0,
+    action: Annotated[
+        str,
+        Field(description='One of "balance", "pricing", "transfer", or "transactions"'),
+    ],
+    did: Annotated[
+        str,
+        Field(
+            description='Agent DID (required for "balance" and "transactions"), e.g. did:moltrust:a1b2c3d4e5f60718'
+        ),
+    ] = "",
+    to_did: Annotated[
+        str,
+        Field(
+            description='Recipient DID (required for "transfer"), e.g. did:moltrust:a1b2c3d4e5f60718'
+        ),
+    ] = "",
+    amount: Annotated[
+        int,
+        Field(
+            description='Number of credits to transfer (required for "transfer", must be >= 1)'
+        ),
+    ] = 0,
+    reference: Annotated[
+        str, Field(description="Optional reference string for transfers")
+    ] = "",
+    limit: Annotated[
+        int,
+        Field(
+            description='Max transactions to return (default 20, for "transactions")'
+        ),
+    ] = 20,
+    offset: Annotated[
+        int, Field(description='Pagination offset (default 0, for "transactions")')
+    ] = 0,
     ctx: Context[ServerSession, MolTrustClient] | None = None,
 ) -> str:
     """Manage MolTrust credits: check balance, view pricing, transfer credits, or view transaction history.
@@ -621,7 +719,7 @@ async def moltrust_credits(
         )
 
 
-@mcp.tool()
+@mcp.tool(annotations=_READ)
 async def moltrust_deposit_info(
     ctx: Context[ServerSession, MolTrustClient] | None = None,
 ) -> str:
@@ -655,10 +753,17 @@ async def moltrust_deposit_info(
     return "\n".join(lines)
 
 
-@mcp.tool()
+@mcp.tool(annotations=_MONEY_IDEMPOTENT)
 async def moltrust_claim_deposit(
-    tx_hash: str,
-    did: str,
+    tx_hash: Annotated[
+        str, Field(description="Base blockchain transaction hash (0x...)")
+    ],
+    did: Annotated[
+        str,
+        Field(
+            description="Your agent's DID to credit, e.g. did:moltrust:a1b2c3d4e5f60718"
+        ),
+    ],
     ctx: Context[ServerSession, MolTrustClient] | None = None,
 ) -> str:
     """Claim MolTrust credits from a USDC deposit on Base.
@@ -713,7 +818,7 @@ async def moltrust_claim_deposit(
     )
 
 
-@mcp.tool()
+@mcp.tool(annotations=_READ)
 async def moltrust_stats(
     ctx: Context[ServerSession, MolTrustClient] | None = None,
 ) -> str:
@@ -737,9 +842,11 @@ async def moltrust_stats(
     return "\n".join(lines)
 
 
-@mcp.tool()
+@mcp.tool(annotations=_READ)
 async def moltrust_deposit_history(
-    did: str,
+    did: Annotated[
+        str, Field(description="The agent's DID, e.g. did:moltrust:a1b2c3d4e5f60718")
+    ],
     ctx: Context[ServerSession, MolTrustClient] | None = None,
 ) -> str:
     """Get USDC deposit history for an agent.
@@ -787,11 +894,23 @@ async def moltrust_deposit_history(
     return "\n".join(lines)
 
 
-@mcp.tool()
+@mcp.tool(annotations=_READ)
 async def moltrust_erc8004(
-    action: str,
-    did: str = "",
-    agent_id: int = 0,
+    action: Annotated[
+        str, Field(description='One of "card", "resolve", or "well-known"')
+    ],
+    did: Annotated[
+        str,
+        Field(
+            description='Agent DID (required for "card", e.g. "did:moltrust:a1b2c3d4e5f60718")'
+        ),
+    ] = "",
+    agent_id: Annotated[
+        int,
+        Field(
+            description='On-chain ERC-8004 agent ID (required for "resolve", e.g. 21023)'
+        ),
+    ] = 0,
     ctx: Context[ServerSession, MolTrustClient] | None = None,
 ) -> str:
     """Query the ERC-8004 on-chain agent registry on Base.
@@ -917,9 +1036,9 @@ async def moltrust_erc8004(
 # ---------------------------------------------------------------------------
 
 
-@mcp.tool()
+@mcp.tool(annotations=_READ)
 async def moltguard_score(
-    address: str,
+    address: Annotated[str, Field(description="Base (EVM) wallet address (0x...)")],
     ctx: Context[ServerSession, MolTrustClient] | None = None,
 ) -> str:
     """Get an agent trust score for a Base wallet address.
@@ -947,9 +1066,9 @@ async def moltguard_score(
     return "\n".join(lines)
 
 
-@mcp.tool()
+@mcp.tool(annotations=_READ)
 async def moltguard_detail(
-    address: str,
+    address: Annotated[str, Field(description="Base (EVM) wallet address (0x...)")],
     ctx: Context[ServerSession, MolTrustClient] | None = None,
 ) -> str:
     """Get a detailed agent trust report for a Base wallet address.
@@ -967,9 +1086,9 @@ async def moltguard_detail(
     return _fmt(resp.json())
 
 
-@mcp.tool()
+@mcp.tool(annotations=_READ)
 async def moltguard_sybil(
-    address: str,
+    address: Annotated[str, Field(description="Base (EVM) wallet address (0x...)")],
     ctx: Context[ServerSession, MolTrustClient] | None = None,
 ) -> str:
     """Scan a Base wallet for Sybil indicators.
@@ -1009,9 +1128,9 @@ async def moltguard_sybil(
     return "\n".join(lines)
 
 
-@mcp.tool()
+@mcp.tool(annotations=_READ)
 async def moltguard_market(
-    market_id: str,
+    market_id: Annotated[str, Field(description="Polymarket market/condition ID")],
     ctx: Context[ServerSession, MolTrustClient] | None = None,
 ) -> str:
     """Check a Polymarket prediction market for integrity anomalies.
@@ -1040,7 +1159,7 @@ async def moltguard_market(
     return "\n".join(lines)
 
 
-@mcp.tool()
+@mcp.tool(annotations=_READ)
 async def moltguard_feed(
     ctx: Context[ServerSession, MolTrustClient] | None = None,
 ) -> str:
@@ -1064,9 +1183,9 @@ async def moltguard_feed(
     return "\n".join(lines)
 
 
-@mcp.tool()
+@mcp.tool(annotations=_MONEY)
 async def moltguard_credential_issue(
-    address: str,
+    address: Annotated[str, Field(description="Base (EVM) wallet address (0x...)")],
     ctx: Context[ServerSession, MolTrustClient] | None = None,
 ) -> str:
     """Issue a W3C Verifiable Credential (AgentTrustCredential) for a wallet.
@@ -1088,9 +1207,14 @@ async def moltguard_credential_issue(
     return _fmt(resp.json())
 
 
-@mcp.tool()
+@mcp.tool(annotations=_READ)
 async def moltguard_credential_verify(
-    jws: str,
+    jws: Annotated[
+        str,
+        Field(
+            description="JWS compact serialization string from a MoltGuard credential"
+        ),
+    ],
     ctx: Context[ServerSession, MolTrustClient] | None = None,
 ) -> str:
     """Verify a MoltGuard Verifiable Credential JWS signature.
@@ -1118,7 +1242,7 @@ async def moltguard_credential_verify(
 # ---------------------------------------------------------------------------
 
 
-@mcp.tool()
+@mcp.tool(annotations=_READ)
 async def mt_shopping_info(
     ctx: Context[ServerSession, MolTrustClient] | None = None,
 ) -> str:
@@ -1134,13 +1258,21 @@ async def mt_shopping_info(
     return _fmt(resp.json())
 
 
-@mcp.tool()
+@mcp.tool(annotations=_READ)
 async def mt_shopping_verify(
-    credential_jws: str,
-    transaction_amount: float,
-    transaction_currency: str,
-    merchant_id: str,
-    item_description: str,
+    credential_jws: Annotated[
+        str, Field(description="JWS compact serialization of the BuyerAgentCredential")
+    ],
+    transaction_amount: Annotated[
+        float, Field(description="Transaction amount (e.g. 189.99)")
+    ],
+    transaction_currency: Annotated[
+        str, Field(description='Currency code (e.g. "USDC")')
+    ],
+    merchant_id: Annotated[str, Field(description="Merchant identifier string")],
+    item_description: Annotated[
+        str, Field(description="Description of the item being purchased")
+    ],
     ctx: Context[ServerSession, MolTrustClient] | None = None,
 ) -> str:
     """Verify a shopping transaction against a BuyerAgentCredential.
@@ -1183,14 +1315,31 @@ async def mt_shopping_verify(
     return "\n".join(lines)
 
 
-@mcp.tool()
+@mcp.tool(annotations=_MONEY)
 async def mt_shopping_issue_vc(
-    agent_did: str,
-    human_did: str,
-    spend_limit: float,
-    currency: str,
-    categories: str,
-    validity_days: int = 30,
+    agent_did: Annotated[
+        str,
+        Field(description='DID of the shopping agent (e.g. "did:moltrust:agent123")'),
+    ],
+    human_did: Annotated[
+        str,
+        Field(
+            description='DID of the authorizing human (e.g. "did:moltrust:human456")'
+        ),
+    ],
+    spend_limit: Annotated[
+        float, Field(description="Maximum spend amount per transaction")
+    ],
+    currency: Annotated[str, Field(description='Currency code (e.g. "USDC", "USD")')],
+    categories: Annotated[
+        str,
+        Field(
+            description='Comma-separated allowed categories (e.g. "electronics,books")'
+        ),
+    ],
+    validity_days: Annotated[
+        int, Field(description="Number of days the credential is valid (default 30)")
+    ] = 30,
     ctx: Context[ServerSession, MolTrustClient] | None = None,
 ) -> str:
     """Issue a BuyerAgentCredential (W3C Verifiable Credential) for a shopping agent.
@@ -1240,7 +1389,7 @@ async def mt_shopping_issue_vc(
 # ---------------------------------------------------------------------------
 
 
-@mcp.tool()
+@mcp.tool(annotations=_READ)
 async def mt_travel_info(
     ctx: Context[ServerSession, MolTrustClient] | None = None,
 ) -> str:
@@ -1256,14 +1405,20 @@ async def mt_travel_info(
     return _fmt(resp.json())
 
 
-@mcp.tool()
+@mcp.tool(annotations=_READ)
 async def mt_travel_verify(
-    agent_did: str,
-    vc_json: str,
-    merchant: str,
-    segment: str,
-    amount: float,
-    currency: str,
+    agent_did: Annotated[
+        str, Field(description='DID of the booking agent (e.g. "did:base:0x...")')
+    ],
+    vc_json: Annotated[
+        str, Field(description="The TravelAgentCredential as a JSON string")
+    ],
+    merchant: Annotated[str, Field(description='Merchant domain (e.g. "hilton.com")')],
+    segment: Annotated[
+        str, Field(description="Booking segment: hotel, flight, car_rental, or rail")
+    ],
+    amount: Annotated[float, Field(description="Booking amount")],
+    currency: Annotated[str, Field(description='Currency code (e.g. "USDC")')],
     ctx: Context[ServerSession, MolTrustClient] | None = None,
 ) -> str:
     """Verify a travel booking against a TravelAgentCredential.
@@ -1317,15 +1472,31 @@ async def mt_travel_verify(
     return "\n".join(lines)
 
 
-@mcp.tool()
+@mcp.tool(annotations=_MONEY)
 async def mt_travel_issue_vc(
-    agent_did: str,
-    principal_did: str,
-    segments: str,
-    spend_limit: float,
-    currency: str,
-    traveler_name: str = "",
-    validity_days: int = 30,
+    agent_did: Annotated[
+        str, Field(description='DID of the travel agent (e.g. "did:base:0x...")')
+    ],
+    principal_did: Annotated[
+        str,
+        Field(description='DID of the authorizing entity (e.g. "did:base:acme-corp")'),
+    ],
+    segments: Annotated[
+        str,
+        Field(
+            description='Comma-separated allowed segments (e.g. "hotel,flight,car_rental")'
+        ),
+    ],
+    spend_limit: Annotated[
+        float, Field(description="Maximum spend amount per booking")
+    ],
+    currency: Annotated[str, Field(description='Currency code (e.g. "USDC")')],
+    traveler_name: Annotated[
+        str, Field(description="Name of the authorized traveler (optional)")
+    ] = "",
+    validity_days: Annotated[
+        int, Field(description="Number of days the credential is valid (default 30)")
+    ] = 30,
     ctx: Context[ServerSession, MolTrustClient] | None = None,
 ) -> str:
     """Issue a TravelAgentCredential (W3C Verifiable Credential) for a booking agent.
@@ -1379,9 +1550,14 @@ async def mt_travel_issue_vc(
 # ---------------------------------------------------------------------------
 
 
-@mcp.tool()
+@mcp.tool(annotations=_FREE_WRITE_IDEMPOTENT)
 async def mt_skill_audit(
-    github_url: str,
+    github_url: Annotated[
+        str,
+        Field(
+            description="URL to the skill (GitHub repo or direct HTTPS link to SKILL.md)"
+        ),
+    ],
     ctx: Context[ServerSession, MolTrustClient] | None = None,
 ) -> str:
     """Audit an AI agent skill (SKILL.md) for security risks.
@@ -1423,9 +1599,11 @@ async def mt_skill_audit(
     return "\n".join(lines)
 
 
-@mcp.tool()
+@mcp.tool(annotations=_READ)
 async def mt_skill_verify(
-    skill_hash: str,
+    skill_hash: Annotated[
+        str, Field(description='Canonical skill hash (e.g. "sha256:a1b2c3...")')
+    ],
     ctx: Context[ServerSession, MolTrustClient] | None = None,
 ) -> str:
     """Verify an AI agent skill by its canonical SHA-256 hash.
@@ -1456,10 +1634,14 @@ async def mt_skill_verify(
     return f"NOT VERIFIED: {data.get('message', 'No credential found')}"
 
 
-@mcp.tool()
+@mcp.tool(annotations=_MONEY)
 async def mt_skill_issue_vc(
-    author_did: str,
-    repository_url: str,
+    author_did: Annotated[
+        str, Field(description='DID of the skill author (e.g. "did:base:0x...")')
+    ],
+    repository_url: Annotated[
+        str, Field(description="URL to the skill repository or SKILL.md")
+    ],
     ctx: Context[ServerSession, MolTrustClient] | None = None,
 ) -> str:
     """Issue a VerifiedSkillCredential for an AI agent skill.
@@ -1503,11 +1685,21 @@ async def mt_skill_issue_vc(
 # ---------------------------------------------------------------------------
 
 
-@mcp.tool()
+@mcp.tool(annotations=_FREE_WRITE_IDEMPOTENT)
 async def mt_prediction_link(
-    address: str,
-    platform: str = "polymarket",
-    did: str = "",
+    address: Annotated[
+        str,
+        Field(description="Prediction market wallet address (0x-prefixed, 42 chars)"),
+    ],
+    platform: Annotated[
+        str, Field(description='Platform name (default: "polymarket")')
+    ] = "polymarket",
+    did: Annotated[
+        str,
+        Field(
+            description='Optional MolTrust DID to link (e.g. "did:moltrust:a1b2c3d4e5f60718")'
+        ),
+    ] = "",
     ctx: Context[ServerSession, MolTrustClient] | None = None,
 ) -> str:
     """Link a prediction market wallet and sync its track record.
@@ -1558,9 +1750,12 @@ async def mt_prediction_link(
     return "\n".join(lines)
 
 
-@mcp.tool()
+@mcp.tool(annotations=_READ)
 async def mt_prediction_wallet(
-    address: str,
+    address: Annotated[
+        str,
+        Field(description="Prediction market wallet address (0x-prefixed, 42 chars)"),
+    ],
     ctx: Context[ServerSession, MolTrustClient] | None = None,
 ) -> str:
     """Get prediction market profile and track record for a wallet.
@@ -1614,9 +1809,11 @@ async def mt_prediction_wallet(
     return "\n".join(lines)
 
 
-@mcp.tool()
+@mcp.tool(annotations=_READ)
 async def mt_prediction_leaderboard(
-    limit: int = 20,
+    limit: Annotated[
+        int, Field(description="Number of entries to return (default 20, max 100)")
+    ] = 20,
     ctx: Context[ServerSession, MolTrustClient] | None = None,
 ) -> str:
     """Get the prediction market leaderboard — top wallets by prediction score.
@@ -1664,9 +1861,11 @@ async def mt_prediction_leaderboard(
 # ---------------------------------------------------------------------------
 
 
-@mcp.tool()
+@mcp.tool(annotations=_READ)
 async def mt_salesguard_verify(
-    product_id: str,
+    product_id: Annotated[
+        str, Field(description='Product identifier (e.g. "AIRMAX-90-WHITE-43")')
+    ],
     ctx: Context[ServerSession, MolTrustClient] | None = None,
 ) -> str:
     """Verify product provenance via MT Salesguard.
@@ -1703,9 +1902,11 @@ async def mt_salesguard_verify(
     return "\n".join(lines)
 
 
-@mcp.tool()
+@mcp.tool(annotations=_READ)
 async def mt_salesguard_reseller(
-    reseller_did: str,
+    reseller_did: Annotated[
+        str, Field(description='Reseller DID (e.g. "did:web:sneakerstore.com")')
+    ],
     ctx: Context[ServerSession, MolTrustClient] | None = None,
 ) -> str:
     """Verify reseller authorization via MT Salesguard.
@@ -1742,11 +1943,13 @@ async def mt_salesguard_reseller(
     return "\n".join(lines)
 
 
-@mcp.tool()
+@mcp.tool(annotations=_FREE_WRITE)
 async def mt_salesguard_register(
-    name: str,
-    domain: str,
-    contact_email: str = "",
+    name: Annotated[str, Field(description='Brand name (e.g. "Nike", "Adidas")')],
+    domain: Annotated[str, Field(description='Brand domain (e.g. "nike.com")')],
+    contact_email: Annotated[
+        str, Field(description="Contact email for the brand (optional)")
+    ] = "",
     ctx: Context[ServerSession, MolTrustClient] | None = None,
 ) -> str:
     """Register a brand with MT Salesguard.
@@ -1794,18 +1997,46 @@ async def mt_salesguard_register(
 # ---------------------------------------------------------------------------
 
 
-@mcp.tool()
+@mcp.tool(annotations=_MONEY_IDEMPOTENT)
 async def mt_fantasy_commit(
-    agent_did: str,
-    contest_id: str,
-    platform: str,
-    sport: str,
-    contest_start_iso: str,
-    lineup_json: str,
-    projected_score: float = 0.0,
-    confidence: float = 0.0,
-    entry_fee_usd: float = 0.0,
-    contest_type: str = "classic",
+    agent_did: Annotated[
+        str, Field(description='Agent DID (e.g. "did:moltrust:a1b2c3d4e5f67890")')
+    ],
+    contest_id: Annotated[
+        str,
+        Field(description='Unique contest identifier (e.g. "dk-nfl-sun-main-2026w12")'),
+    ],
+    platform: Annotated[
+        str,
+        Field(description="Platform name: draftkings, fanduel, yahoo, sleeper, custom"),
+    ],
+    sport: Annotated[
+        str,
+        Field(
+            description="Sport type: nfl, nba, mlb, nhl, pga, nascar, soccer, custom"
+        ),
+    ],
+    contest_start_iso: Annotated[
+        str, Field(description="Contest start time in ISO 8601 (must be in the future)")
+    ],
+    lineup_json: Annotated[
+        str,
+        Field(
+            description='JSON string of lineup object (e.g. \'{"QB":"Mahomes","RB1":"Henry"}\')'
+        ),
+    ],
+    projected_score: Annotated[
+        float, Field(description="Agent's projected score for this lineup")
+    ] = 0.0,
+    confidence: Annotated[
+        float, Field(description="Confidence level 0.0 to 1.0")
+    ] = 0.0,
+    entry_fee_usd: Annotated[
+        float, Field(description="Contest entry fee in USD")
+    ] = 0.0,
+    contest_type: Annotated[
+        str, Field(description='Contest type (e.g. "classic", "showdown")')
+    ] = "classic",
     ctx: Context[ServerSession, MolTrustClient] | None = None,
 ) -> str:
     """Commit a fantasy lineup with a SHA-256 hash anchored on Base L2.
@@ -1876,9 +2107,11 @@ async def mt_fantasy_commit(
     return "\n".join(lines)
 
 
-@mcp.tool()
+@mcp.tool(annotations=_READ)
 async def mt_fantasy_verify(
-    commitment_hash: str,
+    commitment_hash: Annotated[
+        str, Field(description="The 64-char SHA-256 commitment hash")
+    ],
     ctx: Context[ServerSession, MolTrustClient] | None = None,
 ) -> str:
     """Verify a fantasy lineup commitment. Public endpoint, no auth required.
@@ -1940,9 +2173,11 @@ async def mt_fantasy_verify(
     return "\n".join(lines)
 
 
-@mcp.tool()
+@mcp.tool(annotations=_MONEY)
 async def mt_fantasy_history(
-    did: str,
+    did: Annotated[
+        str, Field(description='Agent DID (e.g. "did:moltrust:a1b2c3d4e5f67890")')
+    ],
     ctx: Context[ServerSession, MolTrustClient] | None = None,
 ) -> str:
     """Get fantasy lineup history and stats for an agent.
@@ -1999,13 +2234,26 @@ async def mt_fantasy_history(
 # ---------------------------------------------------------------------------
 
 
-@mcp.tool()
+@mcp.tool(annotations=_FREE_WRITE)
 async def mt_create_interaction_proof(
-    api_key: str,
-    agent_a: str,
-    agent_b: str,
-    interaction_type: str = "skill_verification",
-    outcome: str = "success",
+    api_key: Annotated[
+        str, Field(description="MolTrust API key of the agent creating the proof")
+    ],
+    agent_a: Annotated[
+        str, Field(description="DID of the first agent in the interaction")
+    ],
+    agent_b: Annotated[
+        str, Field(description="DID of the second agent in the interaction")
+    ],
+    interaction_type: Annotated[
+        str,
+        Field(
+            description="Type of interaction (e.g. skill_verification, purchase, prediction)"
+        ),
+    ] = "skill_verification",
+    outcome: Annotated[
+        str, Field(description="Outcome of the interaction: success or failure")
+    ] = "success",
     ctx: Context[ServerSession, MolTrustClient] | None = None,
 ) -> str:
     """Create an interaction proof before issuing a SkillEndorsementCredential.
@@ -2052,14 +2300,36 @@ async def mt_create_interaction_proof(
     return "\n".join(lines)
 
 
-@mcp.tool()
+@mcp.tool(annotations=_FREE_WRITE_IDEMPOTENT)
 async def mt_endorse_agent(
-    endorser_api_key: str,
-    endorsed_did: str,
-    skill: str,
-    evidence_hash: str,
-    evidence_timestamp: str,
-    vertical: str,
+    endorser_api_key: Annotated[
+        str, Field(description="MolTrust API key of the endorsing agent")
+    ],
+    endorsed_did: Annotated[
+        str,
+        Field(
+            description="DID of the agent to endorse, e.g. did:moltrust:a1b2c3d4e5f60718"
+        ),
+    ],
+    skill: Annotated[
+        str,
+        Field(
+            description="Skill being endorsed (python, javascript, security, prediction, trading, data_analysis, api_integration, smart_contracts, nlp, computer_vision, general)"
+        ),
+    ],
+    evidence_hash: Annotated[
+        str,
+        Field(description="SHA-256 hash from mt_create_interaction_proof (sha256:...)"),
+    ],
+    evidence_timestamp: Annotated[
+        str, Field(description="ISO 8601 timestamp from mt_create_interaction_proof")
+    ],
+    vertical: Annotated[
+        str,
+        Field(
+            description="MolTrust vertical (skill, shopping, travel, prediction, salesguard, sports, core)"
+        ),
+    ],
     ctx: Context[ServerSession, MolTrustClient] | None = None,
 ) -> str:
     """Issue a W3C SkillEndorsementCredential for another agent.
@@ -2111,9 +2381,14 @@ async def mt_endorse_agent(
     return "\n".join(lines)
 
 
-@mcp.tool()
+@mcp.tool(annotations=_READ)
 async def mt_get_trust_score(
-    did: str,
+    did: Annotated[
+        str,
+        Field(
+            description='DID of the agent to score (e.g. "did:moltrust:a1b2c3d4e5f67890")'
+        ),
+    ],
     ctx: Context[ServerSession, MolTrustClient] | None = None,
 ) -> str:
     """Get the Swarm Intelligence Trust Score for an agent (Phase 2).
@@ -2175,9 +2450,14 @@ async def mt_get_trust_score(
     return "\n".join(lines)
 
 
-@mcp.tool()
+@mcp.tool(annotations=_READ)
 async def mt_get_swarm_graph(
-    did: str,
+    did: Annotated[
+        str,
+        Field(
+            description="DID of the agent to get graph for, e.g. did:moltrust:a1b2c3d4e5f60718"
+        ),
+    ],
     ctx: Context[ServerSession, MolTrustClient] | None = None,
 ) -> str:
     """Get the trust propagation graph for an agent (2 hops).
@@ -2219,7 +2499,7 @@ async def mt_get_swarm_graph(
     return "\n".join(lines)
 
 
-@mcp.tool()
+@mcp.tool(annotations=_READ)
 async def mt_get_swarm_stats(
     ctx: Context[ServerSession, MolTrustClient] | None = None,
 ) -> str:
@@ -2255,12 +2535,19 @@ async def mt_get_swarm_stats(
     return "\n".join(lines)
 
 
-@mcp.tool()
+@mcp.tool(annotations=_FREE_WRITE_IDEMPOTENT)
 async def mt_register_seed(
-    did: str,
-    label: str,
-    base_score: float = 80.0,
-    admin_key: str = "",
+    did: Annotated[
+        str,
+        Field(
+            description="DID of the agent to register as seed, e.g. did:moltrust:a1b2c3d4e5f60718"
+        ),
+    ],
+    label: Annotated[str, Field(description="Human-readable label for the seed agent")],
+    base_score: Annotated[
+        float, Field(description="Base trust score (0-100, default 80)")
+    ] = 80.0,
+    admin_key: Annotated[str, Field(description="Admin key for authorization")] = "",
     ctx: Context[ServerSession, MolTrustClient] | None = None,
 ) -> str:
     """Register a trusted seed agent in the Swarm Intelligence network (admin only).
@@ -2300,9 +2587,14 @@ async def mt_register_seed(
 # ---------------------------------------------------------------------------
 
 
-@mcp.tool()
+@mcp.tool(annotations=_READ)
 async def mt_get_badge(
-    did: str,
+    did: Annotated[
+        str,
+        Field(
+            description="The DID of the agent to check, e.g. did:moltrust:a1b2c3d4e5f60718"
+        ),
+    ],
     ctx: Context[ServerSession, MolTrustClient] | None = None,
 ) -> str:
     """Get the Verified by MolTrust badge status for an agent.
@@ -2360,10 +2652,17 @@ async def mt_get_badge(
     )
 
 
-@mcp.tool()
+@mcp.tool(annotations=_MONEY)
 async def mt_issue_badge(
-    did: str,
-    tier: str = "verified",
+    did: Annotated[
+        str,
+        Field(
+            description="The DID of the agent to issue a badge for, e.g. did:moltrust:a1b2c3d4e5f60718"
+        ),
+    ],
+    tier: Annotated[
+        str, Field(description="Badge tier — 'verified' or 'trusted'")
+    ] = "verified",
     ctx: Context[ServerSession, MolTrustClient] | None = None,
 ) -> str:
     """Issue a Verified by MolTrust badge for an agent.
@@ -2402,9 +2701,14 @@ async def mt_issue_badge(
     )
 
 
-@mcp.tool()
+@mcp.tool(annotations=_READ)
 async def mt_check_badge(
-    did: str,
+    did: Annotated[
+        str,
+        Field(
+            description="The DID of the agent to check, e.g. did:moltrust:a1b2c3d4e5f60718"
+        ),
+    ],
     ctx: Context[ServerSession, MolTrustClient] | None = None,
 ) -> str:
     """Quick check: is this agent badge-verified by MolTrust?
@@ -2437,16 +2741,27 @@ async def mt_check_badge(
 # ---------------------------------------------------------------------------
 
 
-@mcp.tool()
+@mcp.tool(annotations=_MONEY)
 async def mt_issue_music_credential(
-    agent_did: str,
-    tool: str,
-    human_oversight: str,
-    rights: str,
-    track_title: str,
-    track_description: str = "",
-    genre: str = "",
-    isrc: str = "",
+    agent_did: Annotated[
+        str, Field(description='DID of the agent/creator (e.g. "did:moltrust:abc123")')
+    ],
+    tool: Annotated[
+        str, Field(description='AI tool used (e.g. "Suno API v3.2", "Udio", "Magenta")')
+    ],
+    human_oversight: Annotated[str, Field(description='"true", "false", or "partial"')],
+    rights: Annotated[
+        str,
+        Field(
+            description='Rights declaration (e.g. "CC-BY", "All Rights Reserved", "Agent-Wallet")'
+        ),
+    ],
+    track_title: Annotated[str, Field(description="Title of the track")],
+    track_description: Annotated[str, Field(description="Optional description")] = "",
+    genre: Annotated[
+        str, Field(description='Optional genre (e.g. "ambient", "jazz", "classical")')
+    ] = "",
+    isrc: Annotated[str, Field(description="Optional ISRC code (ISO 3901)")] = "",
     ctx: Context[ServerSession, MolTrustClient] | None = None,
 ) -> str:
     """Issue a VerifiedMusicCredential for an AI-generated music track.
@@ -2497,9 +2812,9 @@ async def mt_issue_music_credential(
     )
 
 
-@mcp.tool()
+@mcp.tool(annotations=_READ)
 async def mt_verify_music_credential(
-    credential_id: str,
+    credential_id: Annotated[str, Field(description="UUID of the music credential")],
     ctx: Context[ServerSession, MolTrustClient] | None = None,
 ) -> str:
     """Verify a VerifiedMusicCredential by its ID.
@@ -2541,9 +2856,9 @@ async def mt_verify_music_credential(
     return "\n".join(lines)
 
 
-@mcp.tool()
+@mcp.tool(annotations=_READ)
 async def mt_get_track_provenance(
-    credential_id: str,
+    credential_id: Annotated[str, Field(description="UUID of the music credential")],
     ctx: Context[ServerSession, MolTrustClient] | None = None,
 ) -> str:
     """Get full provenance details for a music credential.
