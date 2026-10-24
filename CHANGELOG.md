@@ -1,5 +1,25 @@
 # Changelog — moltrust-mcp-server
 
+## 1.2.7
+
+Every tool carries MCP annotations, and every parameter carries a description
+in its input schema.
+
+- **Annotations.** 29 tools only read (`readOnlyHint: true`). Six change
+  something and cost nothing (`destructiveHint: false`): a client may run them
+  without asking. Thirteen move money (`destructiveHint: true`): they charge the
+  caller in credits or x402, move credits, book a deposit, or pay gas for an
+  on-chain write, and stay behind the client's confirmation.
+  `mt_fantasy_history` is among them although it only reads, because it costs a
+  credit. `idempotentHint` is set on every tool that is not read-only.
+- **Parameter descriptions.** The 111 parameters take their description from
+  the `Args:` text that was already in each docstring; until now that text
+  reached the model only as prose, not in the schema.
+- `tests/test_tool_annotations.py` pins the classification and fails on a tool
+  without annotations or a parameter without a description.
+
+No tool was added, removed or renamed, and no call changed.
+
 ## 1.2.6
 
 Registry description and README only; the package code is unchanged.
