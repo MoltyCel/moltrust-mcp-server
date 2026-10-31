@@ -1,5 +1,27 @@
 # Changelog — moltrust-mcp-server
 
+## 1.3.0
+
+The local package registers a MolTrust DID for itself on its first tool call,
+when it has none. Opt out with `MOLTRUST_NO_AUTO_REGISTER=1`.
+
+- **What runs.** Once per installation and API URL: an Ed25519 key pair is
+  generated locally, `GET /identity/register-challenge` and
+  `POST /identity/register-pop` register its public key with the platform
+  value `usage-mcp`, and the DID, public key and private key are stored in
+  `~/.moltrust/mcp-identity.json` (mode 0600). The private key is never sent.
+- **What does not change.** The registration runs in the background; a tool
+  call is never delayed or failed by it. A failure is one line on stderr.
+- **When it does not run.** `MOLTRUST_API_KEY` or `MOLTRUST_DID` set, `CI` set,
+  the HTTP transport, or the opt-out. README "Automatic DID registration" has
+  the full description.
+- New settings: `MOLTRUST_NO_AUTO_REGISTER`, `MOLTRUST_DID`,
+  `MOLTRUST_IDENTITY_FILE`, `MOLTRUST_REGISTER_PLATFORM`.
+- `cryptography` is now a direct dependency; it was already installed through
+  `mcp`.
+
+No tool was added, removed or renamed, and no tool call changed.
+
 ## 1.2.7
 
 Every tool carries MCP annotations, and every parameter carries a description

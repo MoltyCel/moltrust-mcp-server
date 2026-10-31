@@ -258,6 +258,43 @@ MOLTRUST_API_KEY=your_api_key moltrust-mcp-server
 |---------------------|---------|-------------|
 | `MOLTRUST_API_KEY` | — | Your MolTrust API key (required for register, rate, issue) |
 | `MOLTRUST_API_URL` | `https://api.moltrust.ch` | API base URL (for self-hosted instances) |
+| `MOLTRUST_NO_AUTO_REGISTER` | — | Set to `1` to turn off the automatic DID registration described below |
+| `MOLTRUST_DID` | — | Your existing MolTrust DID; when set, nothing is registered |
+| `MOLTRUST_IDENTITY_FILE` | `~/.moltrust/mcp-identity.json` | Where the registered identity is stored |
+| `MOLTRUST_REGISTER_PLATFORM` | `usage-mcp` | The `platform` value sent with the registration |
+
+## Automatic DID registration
+
+Since 1.3.0 the local package gives itself a MolTrust identity (a
+`did:moltrust:` DID) on its first tool call, if it has none. This section says
+exactly what that does, so you can decide whether you want it.
+
+**When it runs.** Once per installation and API URL, on the first tool call of
+the local stdio server. It does not run when `MOLTRUST_API_KEY` or
+`MOLTRUST_DID` is set (you already have an identity), when the `CI`
+environment variable is set, on the hosted HTTP endpoint, or when you opt out.
+
+**What is created.** An Ed25519 key pair, generated on your machine. The
+private key never leaves it.
+
+**What is sent.** Two requests to the API URL: `GET /identity/register-challenge`
+and `POST /identity/register-pop` with the public key, a signature over the
+challenge, a proof-of-work nonce, the display name `mcp-server-<first 12 hex
+characters of the public key>`, the platform `usage-mcp`, the source
+`mcp-server` and the framework `mcp`. Nothing about your tools, prompts,
+arguments or environment is sent. The registration is free and creates a
+public registry entry for the DID, anchored on Base like any other
+registration.
+
+**What is stored.** The DID, the public key and the private key, in
+`~/.moltrust/mcp-identity.json` with file mode 0600. Delete the file to forget
+the identity; the next first call then registers a new one.
+
+**If it fails.** One line on stderr, and the tool call goes on unchanged. The
+registration runs in the background and never delays or fails a tool call.
+
+**Opt out.** Set `MOLTRUST_NO_AUTO_REGISTER=1` in the server's environment, for
+example in the `env` block of your MCP client configuration.
 
 ## Examples
 
