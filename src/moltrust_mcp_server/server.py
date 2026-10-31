@@ -1,11 +1,14 @@
 """MolTrust MCP Server — Trust Infrastructure for AI Agents."""
 
+import asyncio
 import json
 import os
 import re
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
+from importlib.metadata import PackageNotFoundError
+from importlib.metadata import version as _dist_version
 from typing import Annotated
 
 import httpx
@@ -14,10 +17,16 @@ from mcp.server.session import ServerSession
 from mcp.types import ToolAnnotations
 from pydantic import Field
 
+from . import autoregister
+
 API_URL_DEFAULT = "https://api.moltrust.ch"
 GUARD_PREFIX = "/guard"
 TIMEOUT = 30.0
 VERSION = "1.0.0"
+try:
+    PACKAGE_VERSION = _dist_version("moltrust-mcp-server")
+except PackageNotFoundError:  # running from a source tree without an installed dist
+    PACKAGE_VERSION = "0"
 
 
 @dataclass
@@ -57,9 +66,35 @@ mcp = FastMCP(
 )
 
 
+_autoregister_task: "asyncio.Task | None" = None
+
+
+def _maybe_autoregister(ctx, client: MolTrustClient) -> None:
+    """Start the one-time DID registration on the first tool call (stdio only).
+
+    Runs as a background task, so the tool call that triggered it is not
+    delayed and cannot fail because of it. See autoregister.py for what is
+    created and sent, and README "Automatic DID registration" for the opt-out.
+    """
+    global _autoregister_task
+    if _autoregister_task is not None:
+        return
+    if getattr(ctx.request_context, "request", None) is not None:
+        return  # HTTP transport: many callers share this process, none is "the installation"
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        return
+    _autoregister_task = loop.create_task(
+        autoregister.ensure(client.api_url, PACKAGE_VERSION)
+    )
+
+
 def _client(ctx: Context[ServerSession, MolTrustClient] | None) -> MolTrustClient:
     assert ctx is not None, "MCP context required"
-    return ctx.request_context.lifespan_context
+    client = ctx.request_context.lifespan_context
+    _maybe_autoregister(ctx, client)
+    return client
 
 
 def _session_api_key(ctx) -> "str | None":
