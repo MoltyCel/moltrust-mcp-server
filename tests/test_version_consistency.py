@@ -61,3 +61,27 @@ def test_the_registry_field_limits_are_respected():
         if field in record and len(record[field]) > cap
     }
     assert not too_long, f"over the registry cap: {too_long} (caps {REGISTRY_MAX})"
+
+
+# The 2025-12-11 server schema defines `icons` as an array of `Icon`, where only
+# `src` is required: an HTTPS URI of at most 255 characters. `mimeType`, if set,
+# must come from a fixed enum - `image/x-icon` is not in it, so a `.ico` favicon
+# builds a record the schema does not cover. Checked here so the registry does
+# not have to reject it after PyPI already has the wheel.
+ICON_MIME_TYPES = {"image/png", "image/jpeg", "image/jpg", "image/svg+xml", "image/webp"}
+
+
+def test_the_icons_follow_the_registry_schema():
+    record = json.loads((ROOT / "server.json").read_text(encoding="utf-8"))
+    icons = record.get("icons")
+    assert isinstance(icons, list) and icons, "server.json has no icons"
+    for icon in icons:
+        assert set(icon) <= {"src", "mimeType", "sizes", "theme"}, icon
+        src = icon["src"]
+        assert src.startswith("https://") and len(src) <= 255, src
+        if "mimeType" in icon:
+            assert icon["mimeType"] in ICON_MIME_TYPES, icon["mimeType"]
+        for size in icon.get("sizes", []):
+            assert re.fullmatch(r"\d+x\d+|any", size), size
+        if "theme" in icon:
+            assert icon["theme"] in {"light", "dark"}, icon["theme"]
