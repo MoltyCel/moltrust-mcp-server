@@ -1,5 +1,20 @@
 # Changelog — moltrust-mcp-server
 
+## 1.3.1
+
+The registry record carries an icon.
+
+- **`server.json` `icons`.** One entry, `https://moltrust.ch/favicon-32x32.png`,
+  `image/png`, `32x32`, in the form the 2025-12-11 server schema defines
+  (`ServerDetail.icons`, an array of `Icon`; only `src` is required). The file
+  is served from `moltrust.ch`, the domain of `websiteUrl`, which is what the
+  schema asks clients to trust. `favicon.ico` was not used: it is served as
+  `image/x-icon`, which is not in the schema's `mimeType` enum.
+- `tests/test_version_consistency.py` checks the icon entries against the
+  schema's rules for `src`, `mimeType` and `sizes`.
+
+No tool was added, removed or renamed, and no tool call changed.
+
 ## 1.3.0
 
 The local package registers a MolTrust DID for itself on its first tool call,
